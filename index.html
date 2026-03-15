@@ -186,10 +186,19 @@ async function initFirebase() {
   }
 }
 
+// ── iOS Safari 相容 fetch timeout ──────────────────────────────
+function fetchT(url, opts, ms) {
+  ms = ms || 6000;
+  var ctrl = new AbortController();
+  var tid = setTimeout(function(){ ctrl.abort(); }, ms);
+  var o = Object.assign({}, opts || {}, { signal: ctrl.signal });
+  return fetch(url, o).finally(function(){ clearTimeout(tid); });
+}
+
 // ── CEFR ─────────────────────────────────────────────────────
 async function fetchCEFR(word) {
   try {
-    const res = await fetch(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(word)}`, { signal: AbortSignal.timeout(7000) });
+    const res = await fetchT(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(word)}`, {}, 6000);
     if (res.ok) {
       const html = await res.text();
       const m = html.match(/class="[^"]*epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
@@ -205,7 +214,7 @@ async function fetchCEFR(word) {
 // ── Translation ───────────────────────────────────────────────
 async function fetchTranslation(word) {
   try {
-    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|zh-TW`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetchT(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|zh-TW`, {}, 6000);
     if (r.ok) {
       const d = await r.json();
       const t = d?.responseData?.translatedText;
@@ -214,12 +223,12 @@ async function fetchTranslation(word) {
   } catch(e) {}
   for (const ep of ['https://libretranslate.de/translate','https://translate.argosopentech.com/translate']) {
     try {
-      const r = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({q:word,source:'en',target:'zh',format:'text'}), signal:AbortSignal.timeout(4000) });
+      const r = await fetchT(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({q:word,source:'en',target:'zh',format:'text'}) });
       if (r.ok) { const d = await r.json(); if (d?.translatedText && d.translatedText.toLowerCase()!==word.toLowerCase()) return d.translatedText; }
     } catch(e) {}
   }
   try {
-    const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`, { signal: AbortSignal.timeout(4000) });
+    const r = await fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`, {}, 4000);
     if (r.ok) {
       const d = await r.json();
       const pos = d?.[0]?.meanings?.[0]?.partOfSpeech;
@@ -237,7 +246,7 @@ window.fetchWordDetails = async function(word) {
 
   const [transResult, dictResult] = await Promise.allSettled([
     fetchTranslation(wl),
-    fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${wl}`, { signal: AbortSignal.timeout(5000) })
+    fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${wl}`, {}, 5000)
   ]);
   translation = transResult.status==='fulfilled' ? transResult.value : wl;
 
@@ -252,7 +261,7 @@ window.fetchWordDetails = async function(word) {
   const cefr = await fetchCEFR(wl);
 
   try {
-    const wr = await fetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=2&explaintext=1&titles=${encodeURIComponent(wl)}&format=json&origin=*`, { signal: AbortSignal.timeout(5000) });
+    const wr = await fetchT(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=2&explaintext=1&titles=${encodeURIComponent(wl)}&format=json&origin=*`, {}, 6000);
     const wd = await wr.json();
     const pages = wd?.query?.pages; const pid = pages ? Object.keys(pages)[0] : '-1';
     if (pid!=='-1' && pages[pid]?.extract) {
@@ -346,13 +355,13 @@ window.initHangman = async function() {
     if (Math.random() > 0.4) {
       const topics = ['animals','technology','sports','science','astronomy','nature','food','music','geography'];
       const t = topics[Math.floor(Math.random()*topics.length)];
-      const r = await fetch(`https://api.datamuse.com/words?ml=${t}&max=60`);
+      const r = await fetchT(`https://api.datamuse.com/words?ml=${t}&max=60`, {}, 5000);
       const d = await r.json();
       const v = d.filter(x => x.word.length>=4 && x.word.length<=9 && /^[a-z]+$/i.test(x.word));
       word = v[Math.floor(Math.random()*v.length)].word.toUpperCase();
     } else {
       const len = Math.floor(Math.random()*5)+4;
-      const r = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`);
+      const r = await fetchT(`https://random-word-api.herokuapp.com/word?length=${len}`, {}, 5000);
       const d = await r.json();
       word = d[0].toUpperCase();
     }
@@ -865,7 +874,6 @@ document.addEventListener('keydown', e=>{
 loadLocal(); updateUI();
 initFirebase();
 // 5秒後若未連線，確保單機也能正常啟動
-setTimeout(()=>{ if (G.hm.status==='loading') { initHangman(); } }, 5000);
 initHangman(); // 直接啟動，不等 Firebase
 </script>
 </body>
