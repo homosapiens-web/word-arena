@@ -77,7 +77,7 @@ export default function App() {
   };
 
   if (!user) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white font-bold">{loadingText}</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white font-bold">{loadingText}</div>;
   }
 
   return (
@@ -92,7 +92,7 @@ export default function App() {
 
       {/* 內容區域 */}
       <main className="p-4 max-w-4xl mx-auto">
-        {activeTab === 'hangman' && <HangmanGame user={user} setCards={setCards} />}
+        {activeTab === 'hangman' && <HangmanGame user={user} />}
         {activeTab === 'library' && <LibraryView cards={cards} markCardAsSeen={markCardAsSeen} />}
         {activeTab === 'arena' && <ArenaView user={user} cards={cards} />}
       </main>
@@ -136,7 +136,7 @@ function TabButton({ active, onClick, icon, label, locked, badge }) {
       <span className="text-xl mb-1">{locked ? '🔒' : icon}</span>
       <span className="text-xs font-bold">{label}</span>
       {badge !== undefined && badge > 0 && !active && (
-        <span className="absolute top-0 right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+        <span className="absolute top-0 right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md animate-pulse">
           {badge}
         </span>
       )}
@@ -151,7 +151,7 @@ function HangmanGame({ user }) {
   const [mistakes, setMistakes] = useState(0);
   const maxMistakes = 6;
   const [status, setStatus] = useState('loading'); // loading, playing, fetching_info, won, lost
-  const [newCard, setNewCard] = useState(null); // 勝利或失敗後查詢到的單字資料
+  const [newCard, setNewCard] = useState(null);
 
   // 取得新單字
   const fetchNewWord = async () => {
@@ -163,7 +163,7 @@ function HangmanGame({ user }) {
       const isCommon = Math.random() > 0.4;
       let word = "";
       if (isCommon) {
-        const topics = ["animal", "food", "nature", "science", "sports", "technology", "music", "magic", "sword", "dragon"];
+        const topics = ["animal", "food", "nature", "science", "sports", "technology", "music", "magic", "sword", "dragon", "study", "space", "computer"];
         const randomTopic = topics[Math.floor(Math.random() * topics.length)];
         const res = await fetch(`https://api.datamuse.com/words?ml=${randomTopic}&max=100`);
         const data = await res.json();
@@ -186,28 +186,10 @@ function HangmanGame({ user }) {
 
   useEffect(() => { fetchNewWord(); }, []);
 
-  // 實體鍵盤事件監聽 (改進版，不依賴 DOM 模擬點擊，並加入 Enter 快捷鍵)
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      const key = e.key.toLowerCase();
-      
-      // 如果正在遊戲中，且輸入的是 a-z
-      if (status === 'playing' && /^[a-z]$/.test(key)) {
-        guess(key);
-      }
-      // 如果遊戲結束，按下 Enter 可以直接再玩一局
-      else if ((status === 'won' || status === 'lost') && e.key === 'Enter') {
-        fetchNewWord();
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [status, guessedLetters, targetWord, mistakes]);
-
-  // 按鍵邏輯
+  // 鍵盤邏輯
   const guess = (letter) => {
     if (status !== 'playing' || guessedLetters.includes(letter)) return;
+    
     const newGuessed = [...guessedLetters, letter];
     setGuessedLetters(newGuessed);
 
@@ -221,16 +203,31 @@ function HangmanGame({ user }) {
     }
   };
 
+  // 實體鍵盤事件監聽
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const key = e.key.toLowerCase();
+      if (status === 'playing' && /^[a-z]$/.test(key)) {
+        guess(key);
+      } else if ((status === 'won' || status === 'lost') && e.key === 'Enter') {
+        fetchNewWord(); // 遊戲結束時按 Enter 重新開始
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [status, guessedLetters, targetWord, mistakes]);
+
   // 遊戲結束處理 (查字典與生成卡牌)
   const handleGameEnd = async (isWin) => {
-    setStatus('fetching_info'); // 不管輸贏都先顯示查詢中
+    setStatus('fetching_info');
 
     try {
-      // 1. 取得字典定義 (決定戰鬥力)
+      // 1. 取得字典定義
       const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${targetWord}`);
       let dictData = null;
       let meaningsCount = 1;
-      let posSet = new Set(['noun']); // 預設名詞
+      let posSet = new Set(['noun']);
 
       if (dictRes.ok) {
         const data = await dictRes.json();
@@ -246,7 +243,7 @@ function HangmanGame({ user }) {
       if (translation.toLowerCase() === targetWord.toLowerCase()) translation = "稀有詞彙(無翻譯)";
 
       // 3. 取得單字使用頻率 (作為 CEFR 稀有度指標)
-      let freq = 10; // 預設頻率
+      let freq = 10;
       try {
         const dmRes = await fetch(`https://api.datamuse.com/words?sp=${targetWord}&md=f&max=1`);
         const dmData = await dmRes.json();
@@ -258,7 +255,7 @@ function HangmanGame({ user }) {
         console.error("Freq fetch error", err); 
       }
 
-      // 4. 計算數值 (頻率越低 = 越罕見 = 星數越高)
+      // 4. 計算數值
       const wordLen = targetWord.length;
       const posCount = posSet.size;
       
@@ -288,15 +285,13 @@ function HangmanGame({ user }) {
       };
 
       // 5. 如果是贏家，才把卡牌存進資料庫
-      if (isWin) {
+      if (isWin && user) {
         const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
         await addDoc(cardsRef, cardData);
-        setStatus('won');
-      } else {
-        setStatus('lost');
       }
-
-      setNewCard(cardData); // 不管輸贏都把卡牌資料放進去用來顯示
+      
+      setNewCard(cardData);
+      setStatus(isWin ? 'won' : 'lost');
 
     } catch (err) {
       console.error("單字查詢失敗:", err);
@@ -353,7 +348,6 @@ function HangmanGame({ user }) {
               return (
                 <button 
                   key={char} 
-                  id={`key-${char}`} // 給實體鍵盤抓取用
                   onClick={() => guess(char)}
                   disabled={isGuessed}
                   className={`py-3 uppercase font-bold rounded-lg text-lg transition-all
@@ -367,9 +361,9 @@ function HangmanGame({ user }) {
               )
             })}
           </div>
-          <div className="text-slate-500 text-xs mt-5 animate-pulse flex items-center gap-1 bg-slate-800/50 px-3 py-1.5 rounded-full">
-            <span>⌨️</span>
-            <span>你可以直接使用實體鍵盤輸入字母 (結束可按 Enter 重新開始)</span>
+          <div className="text-slate-500 text-xs mt-5 flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-full shadow-inner border border-slate-700">
+            <span className="text-lg">⌨️</span>
+            <span>支援實體鍵盤操作 (遊戲結束可按 <strong className="text-white">Enter</strong> 重來)</span>
           </div>
         </div>
       )}
@@ -391,15 +385,15 @@ function HangmanGame({ user }) {
               <p className={`text-sm mb-2 text-center ${status === 'won' ? 'text-green-300' : 'text-slate-400'}`}>
                 {status === 'won' ? '你獲得了一張新卡牌！' : '別氣餒，來看看正確單字與解釋：'}
               </p>
-              {/* 如果是輸了，給卡牌加一點灰暗的濾鏡 */}
               <div className={status === 'lost' ? 'opacity-80 grayscale-[30%]' : ''}>
                 <WordCard card={newCard} />
               </div>
             </div>
           )}
 
-          <button onClick={fetchNewWord} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform active:scale-95 w-full text-lg">
-            再猜一次 (Enter)
+          <button onClick={fetchNewWord} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform active:scale-95 w-full text-lg flex items-center justify-center gap-2">
+            <span>再猜一次</span>
+            <span className="text-sm font-normal bg-indigo-800 px-2 py-0.5 rounded text-indigo-200 border border-indigo-500">Enter</span>
           </button>
         </div>
       )}
@@ -419,9 +413,11 @@ function LibraryView({ cards, markCardAsSeen }) {
     <div>
       <h2 className="text-xl font-bold mb-4 flex justify-between items-center">
         <span>🎴 我的卡牌庫</span>
-        <span className="text-sm font-normal text-slate-400">總戰力: {cards.reduce((acc, c) => acc + c.atk + c.hp, 0)}</span>
+        <span className="text-sm font-normal text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+          總戰力: <span className="text-yellow-400 font-bold">{cards.reduce((acc, c) => acc + c.atk + c.hp, 0)}</span>
+        </span>
       </h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
         {cards.map(card => (
           <div 
             key={card.id} 
@@ -432,7 +428,7 @@ function LibraryView({ cards, markCardAsSeen }) {
             className="cursor-pointer transform hover:scale-105 transition-transform relative"
           >
             {card.isNew && (
-              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full z-10 shadow border border-red-700 animate-pulse">
+              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full z-10 shadow border border-red-700 animate-bounce">
                 NEW
               </div>
             )}
@@ -493,7 +489,7 @@ function ArenaView({ user, cards }) {
       setMatchData({ opponentName: 'AI 機器人', opponentPower: aiPower });
       setBattleResult(myPower >= aiPower ? 'win' : 'lose');
       setBattleState('result');
-    }, 2000); // 模擬戰鬥動畫時間
+    }, 2000);
   };
 
   // 線上 PvP 模式
@@ -556,7 +552,7 @@ function ArenaView({ user, cards }) {
       <div className="flex flex-col items-center justify-center py-20">
         <div className="text-6xl animate-spin mb-6">🌀</div>
         <h2 className="text-2xl font-bold animate-pulse text-indigo-400">正在尋找線上對手...</h2>
-        <button onClick={() => setBattleState('menu')} className="mt-8 text-slate-400 underline">取消搜尋</button>
+        <button onClick={() => setBattleState('menu')} className="mt-8 text-slate-400 underline hover:text-white">取消搜尋</button>
       </div>
     );
   }
@@ -587,7 +583,7 @@ function ArenaView({ user, cards }) {
             <div className="text-3xl font-bold">{matchData.opponentPower}</div>
           </div>
         </div>
-        <button onClick={() => setBattleState('menu')} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg">
+        <button onClick={() => setBattleState('menu')} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform active:scale-95">
           返回競技場大廳
         </button>
       </div>
