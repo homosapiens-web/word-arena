@@ -1,543 +1,872 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>單字卡牌大亂鬥 Word Arena</title>
-  
-  <!-- 載入 Tailwind CSS 來處理畫面排版與美化 -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- 載入 React 核心引擎 (透過 CDN 讓 HTML 能直接跑 React) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>單字卡牌大亂鬥 Word Arena</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+TC:wght@400;700;900&display=swap');
+*{box-sizing:border-box}
+body{font-family:'Noto Sans TC',sans-serif;background:#080d1a;color:#fff;min-height:100vh;padding-bottom:72px}
+.font-display{font-family:'Bebas Neue',sans-serif}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes slideDown{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes zoomIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes popBounce{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+@keyframes legendGlow{0%,100%{box-shadow:0 0 0 rgba(251,191,36,0)}50%{box-shadow:0 0 22px rgba(251,191,36,.45)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.anim-fade{animation:fadeIn .3s ease forwards}
+.anim-up{animation:slideUp .4s cubic-bezier(.22,.68,0,1.2) forwards}
+.anim-down{animation:slideDown .35s ease forwards}
+.anim-zoom{animation:zoomIn .35s cubic-bezier(.22,.68,0,1.2) forwards}
+.anim-pop{animation:popBounce .5s cubic-bezier(.22,.68,0,1.2) forwards}
+.anim-shake{animation:shake .35s ease}
+.legend-glow{animation:legendGlow 2.2s ease-in-out infinite}
+/* hangman body parts */
+.hm-head{opacity:0;transition:opacity .3s ease}
+.hm-head.show{opacity:1}
+.hm-part{stroke-dasharray:200;stroke-dashoffset:200;transition:stroke-dashoffset .4s ease}
+.hm-part.show{stroke-dashoffset:0}
+/* keys */
+.key-btn{aspect-ratio:1;min-height:36px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;border:1px solid;user-select:none;transition:all .12s}
+.key-btn:not(:disabled){background:#1e293b;border-color:#334155;color:#fff}
+.key-btn:not(:disabled):hover{background:#2d3f55}
+.key-btn:not(:disabled):active{transform:scale(.82)}
+.key-btn.wr{background:#1a0a0a;border-color:#7f1d1d;color:#3f1010;cursor:not-allowed}
+.key-btn.ok{background:#0a1a0d;border-color:#14532d;color:#0d3316;cursor:not-allowed}
+/* CEFR */
+.cefr{font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:999px;border:1px solid}
+.cefr-A1{background:#14532d33;color:#4ade80;border-color:#16a34a66}
+.cefr-A2{background:#065f4633;color:#6ee7b7;border-color:#059669}
+.cefr-B1{background:#1e3a8a33;color:#93c5fd;border-color:#2563eb66}
+.cefr-B2{background:#4c1d9533;color:#c4b5fd;border-color:#7c3aed66}
+.cefr-C1{background:#7c120033;color:#fca5a5;border-color:#dc262666}
+.cefr-C2{background:#78350f33;color:#fde68a;border-color:#d9770066}
+.cefr-X{background:#1e293b;color:#64748b;border-color:#334155}
+.no-sb::-webkit-scrollbar{display:none}
+.no-sb{-ms-overflow-style:none;scrollbar-width:none}
+.tab-btn{color:#4b5563;transition:color .2s}
+.tab-btn.active{color:#818cf8}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:150;display:flex;align-items:center;justify-content:center;padding:1rem}
+.overlay.hidden{display:none!important}
+</style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans pb-20 selection:bg-indigo-500">
-  
-  <!-- 網頁內容的渲染容器 -->
-  <div id="root">
-    <div class="min-h-screen flex items-center justify-center">
-      <div class="text-indigo-400 font-bold text-xl animate-pulse flex flex-col items-center">
-        <span class="text-4xl mb-4">✨</span>
-        正在載入遊戲引擎...
-      </div>
-    </div>
+<body>
+
+<!-- Toast -->
+<div id="toasts" class="fixed top-16 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2 pointer-events-none w-[92%] max-w-sm"></div>
+
+<!-- Header -->
+<header class="sticky top-0 z-50 bg-[#0d1424]/95 backdrop-blur border-b border-slate-800 px-5 py-3 flex justify-between items-center shadow-xl">
+  <h1 class="font-display text-2xl tracking-widest" style="background:linear-gradient(135deg,#818cf8,#c084fc,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">&#9876; WORD ARENA</h1>
+  <div class="flex items-center gap-2 text-sm">
+    <span class="text-slate-500">收集</span>
+    <span id="hdr-count" class="font-bold bg-indigo-600/25 border border-indigo-500/40 px-2.5 py-0.5 rounded-full text-indigo-200">0</span>
+    <span id="hdr-mode" class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-600 text-slate-400 bg-slate-800/50">單機</span>
   </div>
+</header>
 
-  <!-- 載入 Firebase 雲端資料庫模組 -->
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-    import { getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+<!-- Card Modal -->
+<div id="card-modal" class="overlay hidden">
+  <div class="bg-[#111827] border border-slate-600/50 rounded-3xl w-full max-w-md p-6 shadow-2xl anim-zoom relative max-h-[90vh] overflow-y-auto no-sb">
+    <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full w-9 h-9 flex items-center justify-center transition-all"><i class="fas fa-times"></i></button>
+    <div id="card-modal-body" class="flex flex-col items-center pt-1"></div>
+  </div>
+</div>
 
-    // 把 Firebase 功能掛載到全域環境，讓底下的 React 可以呼叫
-    window.FB = {
-      initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-      getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc
-    };
-    // 發出載入完成的通知
-    window.dispatchEvent(new Event('firebaseLoaded'));
-  </script>
+<!-- Main -->
+<main class="max-w-2xl mx-auto px-4 pt-4 w-full">
+  <div id="view-hangman" class="anim-fade">
+    <div id="hm-container" class="flex flex-col items-center w-full max-w-lg mx-auto"></div>
+  </div>
+  <div id="view-library" class="hidden anim-fade">
+    <div class="flex justify-between items-end mb-5">
+      <h2 class="text-xl font-bold flex items-center gap-2"><i class="fas fa-book-open text-indigo-400"></i>卡牌庫</h2>
+      <span class="text-xs text-slate-500">點擊查看詳情</span>
+    </div>
+    <div id="lib-container" class="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-6"></div>
+  </div>
+  <div id="view-arena" class="hidden anim-fade">
+    <div id="arena-container" class="w-full"></div>
+  </div>
+</main>
 
-  <!-- 遊戲主程式 (使用 Babel 即時編譯 React 語法) -->
-  <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+<!-- Bottom Nav -->
+<nav class="fixed bottom-0 w-full bg-[#0d1424]/95 backdrop-blur border-t border-slate-800 flex z-50">
+  <button id="tab-hangman" class="tab-btn active flex-1 flex flex-col items-center py-2" onclick="switchTab('hangman')">
+    <i class="fas fa-gamepad text-2xl mb-0.5"></i><span class="text-[11px] font-medium">猜單字</span>
+  </button>
+  <button id="tab-library" class="tab-btn flex-1 flex flex-col items-center py-2 relative" onclick="switchTab('library')">
+    <i class="fas fa-book-open text-2xl mb-0.5"></i><span class="text-[11px] font-medium">卡牌庫</span>
+    <span id="lib-badge" class="hidden absolute top-1 right-5 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 rounded-full flex items-center justify-center px-1"></span>
+  </button>
+  <button id="tab-arena" class="tab-btn flex-1 flex flex-col items-center py-2" onclick="switchTab('arena')" disabled>
+    <i id="arena-nav-icon" class="fas fa-lock text-2xl mb-0.5"></i>
+    <span id="arena-nav-label" class="text-[11px] font-medium">競技場(需4張)</span>
+  </button>
+</nav>
 
-    // 啟動應用程式的函式
-    function startApp() {
-      const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, collection, doc, setDoc, onSnapshot, addDoc, updateDoc } = window.FB;
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-      // 檢查是否為本地開啟 (判斷有沒有外部傳入的 Firebase 設定)
-      const isLocal = typeof __firebase_config === 'undefined';
-      const appId = typeof __app_id !== 'undefined' ? __app_id : 'hangman-card-battler';
-      let app, auth, db;
+// ── State ────────────────────────────────────────────────────
+let fbDb, fbAppId, fbUser, fbUnsubCards, fbUnsubMatches;
 
-      // 如果有雲端設定，就初始化 Firebase
-      if (!isLocal) {
-        app = initializeApp(JSON.parse(__firebase_config));
-        auth = getAuth(app);
-        db = getFirestore(app);
+const G = {
+  mode: 'offline',
+  cards: [],
+  activeTab: 'hangman',
+  hm: { status:'loading', word:'', guessed:[], mistakes:0, maxMistakes:6, newCard:null, details:null },
+  arena: {
+    view: 'deck_select',
+    deck: [],
+    rooms: [],
+    matchId: null, matchData: null,
+    // AI battle state
+    aiRound:1, aiMyWins:0, aiOpWins:0,
+    myAiState: null, aiState: null,
+    roundResult: null
+  }
+};
+
+// ── Toast ────────────────────────────────────────────────────
+window.toast = (msg, err=false) => {
+  const el = document.createElement('div');
+  el.className = `px-5 py-3 rounded-full shadow-2xl border anim-down flex items-center gap-2 text-sm font-bold w-full justify-center pointer-events-auto ${err?'bg-rose-950 border-rose-700 text-rose-200':'bg-slate-800 border-slate-600/50 text-white'}`;
+  el.innerHTML = `<i class="fas ${err?'fa-triangle-exclamation text-rose-400':'fa-circle-check text-indigo-400'}"></i>${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3200);
+};
+
+// ── Storage ──────────────────────────────────────────────────
+function saveLocal() { try{ localStorage.setItem('WA_v2', JSON.stringify(G.cards)); }catch(e){} }
+function loadLocal() {
+  try {
+    const r = localStorage.getItem('WA_v2');
+    if (r) { G.cards = JSON.parse(r); return; }
+    const old = localStorage.getItem('wordArenaCards');
+    if (old) G.cards = JSON.parse(old).map((c,i)=>({...c, id:c.id||'old'+i}));
+  } catch(e) { G.cards = []; }
+}
+
+// ── Firebase ─────────────────────────────────────────────────
+async function initFirebase() {
+  try {
+    let cfg = {};
+    if (typeof __firebase_config !== 'undefined') cfg = typeof __firebase_config==='string'?JSON.parse(__firebase_config):__firebase_config;
+    if (!cfg || !Object.keys(cfg).length) throw new Error('no config');
+    fbAppId = typeof __app_id !== 'undefined' ? __app_id : 'word-arena-v2';
+    const app = initializeApp(cfg);
+    const auth = getAuth(app);
+    fbDb = getFirestore(app);
+    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+    else await signInAnonymously(auth);
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        fbUser = user; G.mode = 'online';
+        document.getElementById('hdr-mode').textContent = '連線';
+        document.getElementById('hdr-mode').className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-600/50 text-emerald-300 bg-emerald-900/20';
+        const ref = collection(fbDb,'artifacts',fbAppId,'users',user.uid,'cards');
+        fbUnsubCards = onSnapshot(ref, snap => {
+          G.cards = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);
+          updateUI();
+          if (G.activeTab==='library') renderLibrary();
+          if (G.activeTab==='arena') renderArena();
+        });
       }
+    });
+  } catch(e) {
+    // pure offline
+  }
+}
 
-      // --- 主應用程式元件 ---
-      function App() {
-        // 如果是本地模式，給一個虛擬的玩家 ID
-        const [user, setUser] = useState(isLocal ? { uid: 'local-tester' } : null);
-        const [cards, setCards] = useState([]);
-        const [activeTab, setActiveTab] = useState('hangman'); 
-        const [loadingText, setLoadingText] = useState(isLocal ? "" : "正在連線至伺服器...");
-
-        // 1. 初始化驗證
-        useEffect(() => {
-          if (isLocal) return; // 本地模式不需要連線驗證
-
-          const initAuth = async () => {
-            try {
-              if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-              } else {
-                await signInAnonymously(auth);
-              }
-            } catch (err) {
-              console.error("連線錯誤:", err);
-            }
-          };
-          initAuth();
-
-          const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
-            if (currentUser) setLoadingText("");
-          });
-          return () => unsubscribe();
-        }, []);
-
-        // 2. 獲取卡牌資料
-        useEffect(() => {
-          if (isLocal) {
-            // 本地模式：預先給一張歡迎卡牌
-            setCards([{
-              id: 'demo-card', word: 'welcome', translation: '歡迎 (單機模式)', stars: 4, hp: 150, atk: 60, isNew: true, createdAt: Date.now()
-            }]);
-            return;
-          }
-          if (!user) return;
-
-          const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
-          const unsubscribe = onSnapshot(cardsRef, (snapshot) => {
-            const loadedCards = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            loadedCards.sort((a, b) => b.createdAt - a.createdAt); // 依獲得時間排序
-            setCards(loadedCards);
-          }, (error) => console.error("抓取卡牌錯誤:", error));
-
-          return () => unsubscribe();
-        }, [user]);
-
-        const hasFirstWin = cards.length > 0;
-        const hasEnoughCardsForArena = cards.length >= 3;
-        const unseenCount = cards.filter(c => c.isNew).length;
-
-        // 標記卡牌已讀 (消滅紅點)
-        const markCardAsSeen = async (cardId) => {
-          if (isLocal) {
-            setCards(prev => prev.map(c => c.id === cardId ? { ...c, isNew: false } : c));
-            return;
-          }
-          if (!user) return;
-          try {
-            const cardRef = doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId);
-            await updateDoc(cardRef, { isNew: false });
-          } catch (e) {
-            console.error("更新卡牌狀態失敗", e);
-          }
-        };
-
-        if (!user) {
-          return <div className="min-h-screen flex items-center justify-center font-bold">{loadingText}</div>;
-        }
-
-        return (
-          <div>
-            <header className="bg-slate-800 p-4 shadow-md text-center border-b border-slate-700 sticky top-0 z-10">
-              <h1 className="text-2xl font-black bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                📝 單字大亂鬥 {isLocal && <span className="text-xs text-yellow-400 bg-slate-700 px-2 py-0.5 rounded ml-2">單機版</span>}
-              </h1>
-              <div className="text-xs text-slate-400 mt-1">目前收集卡牌: {cards.length} 張</div>
-            </header>
-
-            <main className="p-4 max-w-4xl mx-auto">
-              {activeTab === 'hangman' && <HangmanGame user={user} setCards={setCards} />}
-              {activeTab === 'library' && <LibraryView cards={cards} markCardAsSeen={markCardAsSeen} />}
-              {activeTab === 'arena' && <ArenaView user={user} cards={cards} />}
-            </main>
-
-            {hasFirstWin && (
-              <nav className="fixed bottom-0 w-full bg-slate-800 border-t border-slate-700 flex justify-around p-3 z-50">
-                <TabButton active={activeTab === 'hangman'} onClick={() => setActiveTab('hangman')} icon="🎮" label="猜單字" />
-                <TabButton active={activeTab === 'library'} onClick={() => setActiveTab('library')} icon="🎴" label="卡牌庫" badge={unseenCount} />
-                <TabButton active={activeTab === 'arena'} onClick={() => hasEnoughCardsForArena ? setActiveTab('arena') : alert('需要至少 3 張卡牌才能進入競技場！')} icon="⚔️" label="競技場" locked={!hasEnoughCardsForArena} />
-              </nav>
-            )}
-          </div>
-        );
-      }
-
-      // --- 底部導航按鈕 ---
-      function TabButton({ active, onClick, icon, label, locked, badge }) {
-        return (
-          <button onClick={onClick} className={`flex flex-col items-center justify-center w-24 p-2 rounded-xl transition-all relative ${active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:bg-slate-700'} ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <span className="text-xl mb-1">{locked ? '🔒' : icon}</span>
-            <span className="text-xs font-bold">{label}</span>
-            {badge > 0 && !active && (
-              <span className="absolute top-0 right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md animate-pulse">{badge}</span>
-            )}
-          </button>
-        );
-      }
-
-      // --- 猜單字遊戲 ---
-      function HangmanGame({ user, setCards }) {
-        const [targetWord, setTargetWord] = useState('');
-        const [guessedLetters, setGuessedLetters] = useState([]);
-        const [mistakes, setMistakes] = useState(0);
-        const maxMistakes = 6;
-        const [status, setStatus] = useState('loading');
-        const [newCard, setNewCard] = useState(null);
-
-        const fetchNewWord = async () => {
-          setStatus('loading'); setGuessedLetters([]); setMistakes(0); setNewCard(null);
-          try {
-            const isCommon = Math.random() > 0.4;
-            let word = "";
-            if (isCommon) {
-              const topics = ["animal", "food", "nature", "science", "sports", "technology", "music", "magic", "sword", "dragon", "study", "space", "computer"];
-              const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-              const res = await fetch(`https://api.datamuse.com/words?ml=${randomTopic}&max=100`);
-              const data = await res.json();
-              const validWords = data.filter(i => i.word.length >= 4 && i.word.length <= 9 && /^[a-z]+$/.test(i.word));
-              word = validWords[Math.floor(Math.random() * validWords.length)].word;
-            } else {
-              const len = Math.floor(Math.random() * 5) + 4;
-              const res = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`);
-              const data = await res.json();
-              word = data[0].toLowerCase();
-            }
-            setTargetWord(word); setStatus('playing');
-          } catch (err) {
-            setTargetWord('error'); setStatus('playing');
-          }
-        };
-
-        useEffect(() => { fetchNewWord(); }, []);
-
-        const guess = (letter) => {
-          if (status !== 'playing' || guessedLetters.includes(letter)) return;
-          const newGuessed = [...guessedLetters, letter];
-          setGuessedLetters(newGuessed);
-
-          if (!targetWord.includes(letter)) {
-            const newMistakes = mistakes + 1;
-            setMistakes(newMistakes);
-            if (newMistakes >= maxMistakes) handleGameEnd(false);
-          } else {
-            const isWin = targetWord.split('').every(char => newGuessed.includes(char));
-            if (isWin) handleGameEnd(true);
-          }
-        };
-
-        useEffect(() => {
-          const handleKeyDown = (e) => {
-            const key = e.key.toLowerCase();
-            if (status === 'playing' && /^[a-z]$/.test(key)) guess(key);
-            else if ((status === 'won' || status === 'lost') && e.key === 'Enter') fetchNewWord();
-          };
-          window.addEventListener('keydown', handleKeyDown);
-          return () => window.removeEventListener('keydown', handleKeyDown);
-        }, [status, guessedLetters, targetWord, mistakes]);
-
-        const handleGameEnd = async (isWin) => {
-          setStatus('fetching_info');
-          try {
-            // 查字典與翻譯
-            const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${targetWord}`);
-            let dictData = null; let meaningsCount = 1; let posSet = new Set(['noun']);
-            if (dictRes.ok) {
-              const data = await dictRes.json();
-              dictData = data[0];
-              meaningsCount = dictData.meanings.reduce((acc, curr) => acc + curr.definitions.length, 0);
-              dictData.meanings.forEach(m => posSet.add(m.partOfSpeech));
-            }
-
-            const transRes = await fetch(`https://api.mymemory.translated.net/get?q=${targetWord}&langpair=en|zh-TW`);
-            const transData = await transRes.json();
-            let translation = transData.responseData?.translatedText || "未知";
-            if (translation.toLowerCase() === targetWord.toLowerCase()) translation = "稀有詞彙(無翻譯)";
-
-            // 計算數值
-            const wordLen = targetWord.length;
-            const posCount = posSet.size;
-            let stars = Math.min(6, Math.max(1, Math.floor(wordLen / 2) + (posCount > 2 ? 1 : 0) + (Math.random() > 0.8 ? 1 : 0)));
-            const hp = (wordLen * 20) + (posCount * 50) + (stars * 10) + Math.floor(Math.random() * 50);
-            const atk = (meaningsCount * 15) + (stars * 30) + Math.floor(Math.random() * 20);
-
-            const cardData = {
-              word: targetWord, translation, stars, hp, atk,
-              meanings: dictData ? dictData.meanings.map(m => ({
-                pos: m.partOfSpeech, defs: m.definitions.slice(0, 2).map(d => d.definition)
-              })) : [{ pos: 'unknown', defs: ['No detailed definition found.'] }],
-              createdAt: Date.now(), isNew: true
-            };
-
-            if (isWin) {
-              if (isLocal) {
-                // 單機模式直接存入狀態
-                setCards(prev => [...prev, { ...cardData, id: Date.now().toString() }]);
-              } else if (user) {
-                // 雲端模式存入資料庫
-                const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
-                await addDoc(cardsRef, cardData);
-              }
-            }
-            setNewCard(cardData); setStatus(isWin ? 'won' : 'lost');
-          } catch (err) {
-            console.error(err); setStatus(isWin ? 'won' : 'lost');
-          }
-        };
-
-        return (
-          <div className="flex flex-col items-center">
-            {/* 絞刑架視覺 */}
-            <div className="w-48 h-48 mb-4 relative bg-slate-800 rounded-2xl shadow-inner border border-slate-700 flex justify-center items-center">
-              <svg width="150" height="150" viewBox="0 0 200 250" className="stroke-slate-300">
-                  <line x1="20" y1="230" x2="100" y2="230" strokeWidth="6" strokeLinecap="round"/>
-                  <line x1="60" y1="230" x2="60" y2="20" strokeWidth="6" strokeLinecap="round"/>
-                  <line x1="57" y1="20" x2="140" y2="20" strokeWidth="6" strokeLinecap="round"/>
-                  <line x1="140" y1="17" x2="140" y2="50" strokeWidth="6" strokeLinecap="round"/>
-                  {mistakes > 0 && <circle cx="140" cy="70" r="20" fill="none" strokeWidth="5" />}
-                  {mistakes > 1 && <line x1="140" y1="90" x2="140" y2="150" strokeWidth="5" />}
-                  {mistakes > 2 && <line x1="140" y1="110" x2="110" y2="130" strokeWidth="5" />}
-                  {mistakes > 3 && <line x1="140" y1="110" x2="170" y2="130" strokeWidth="5" />}
-                  {mistakes > 4 && <line x1="140" y1="150" x2="110" y2="190" strokeWidth="5" />}
-                  {mistakes > 5 && <line x1="140" y1="150" x2="170" y2="190" strokeWidth="5" />}
-              </svg>
-            </div>
-
-            <div className={`font-bold mb-4 ${mistakes >= maxMistakes - 2 ? 'text-red-400' : 'text-slate-400'}`}>
-              剩餘容錯次數: <span className="text-xl">{maxMistakes - mistakes}</span> / {maxMistakes}
-            </div>
-
-            <div className="flex gap-2 mb-8 flex-wrap justify-center">
-              {status === 'loading' ? <span className="text-indigo-400 animate-pulse">尋找單字中...</span> : 
-                targetWord.split('').map((char, i) => (
-                  <div key={i} className={`w-10 h-12 flex items-end justify-center text-3xl font-bold uppercase border-b-4 ${guessedLetters.includes(char) || status === 'lost' ? 'border-indigo-400 text-white' : 'border-slate-600 text-transparent'} ${status === 'lost' && !guessedLetters.includes(char) ? 'text-red-500 border-red-500' : ''}`}>
-                    {guessedLetters.includes(char) || status === 'lost' ? char : '_'}
-                  </div>
-                ))
-              }
-            </div>
-
-            {status === 'playing' && (
-              <div className="flex flex-col items-center w-full max-w-2xl">
-                <div className="grid grid-cols-7 sm:grid-cols-9 gap-2 w-full">
-                  {"abcdefghijklmnopqrstuvwxyz".split('').map(char => {
-                    const isGuessed = guessedLetters.includes(char);
-                    const isCorrect = targetWord.includes(char);
-                    return (
-                      <button key={char} onClick={() => guess(char)} disabled={isGuessed} className={`py-3 uppercase font-bold rounded-lg text-lg transition-all ${!isGuessed ? 'bg-slate-700 text-white hover:bg-indigo-600 active:scale-95' : isCorrect ? 'bg-green-600/50 text-green-200 cursor-not-allowed' : 'bg-red-900/60 text-red-300 border border-red-800/50 cursor-not-allowed'}`}>
-                        {char}
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="text-slate-500 text-xs mt-5 flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-full">
-                  <span className="text-lg">⌨️</span>
-                  <span>支援實體鍵盤操作 (遊戲結束可按 <strong className="text-white">Enter</strong> 重來)</span>
-                </div>
-              </div>
-            )}
-
-            {status === 'fetching_info' && <div className="animate-pulse text-yellow-400 font-bold text-xl mt-4">✨ 正在查詢字典與分析單字中... ✨</div>}
-
-            {(status === 'won' || status === 'lost') && (
-              <div className="w-full max-w-md bg-slate-800 p-6 rounded-2xl text-center shadow-2xl border border-slate-700">
-                <h2 className={`text-3xl font-black mb-2 ${status==='won'?'text-green-400':'text-red-500'}`}>
-                  {status === 'won' ? '🎉 挑戰成功！' : '💀 挑戰失敗'}
-                </h2>
-                {newCard && (
-                  <div className="my-6 text-left">
-                    <div className={status === 'lost' ? 'opacity-80 grayscale-[30%]' : ''}>
-                      <WordCard card={newCard} />
-                    </div>
-                  </div>
-                )}
-                <button onClick={fetchNewWord} className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-transform active:scale-95 w-full text-lg flex items-center justify-center gap-2">
-                  <span>再猜一次</span><span className="text-sm font-normal bg-indigo-800 px-2 py-0.5 rounded text-indigo-200 border border-indigo-500">Enter</span>
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // --- 卡牌庫檢視 ---
-      function LibraryView({ cards, markCardAsSeen }) {
-        const [selectedCard, setSelectedCard] = useState(null);
-        if (cards.length === 0) return <div className="text-center text-slate-500 mt-20">還沒有任何卡牌，快去猜單字吧！</div>;
-        return (
-          <div>
-            <h2 className="text-xl font-bold mb-4 flex justify-between items-center">
-              <span>🎴 我的卡牌庫</span>
-              <span className="text-sm font-normal text-slate-400 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
-                總戰力: <span className="text-yellow-400 font-bold">{cards.reduce((acc, c) => acc + c.atk + c.hp, 0)}</span>
-              </span>
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pb-10">
-              {cards.map(card => (
-                <div key={card.id} onClick={() => { setSelectedCard(card); if (card.isNew) markCardAsSeen(card.id); }} className="cursor-pointer transform hover:scale-105 transition-transform relative">
-                  {card.isNew && <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full z-10 shadow border border-red-700 animate-bounce">NEW</div>}
-                  <WordCard card={card} compact={true} />
-                </div>
-              ))}
-            </div>
-
-            {selectedCard && (
-              <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]" onClick={() => setSelectedCard(null)}>
-                <div className="bg-slate-800 rounded-2xl w-full max-w-sm border border-slate-600 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-                  <WordCard card={selectedCard} />
-                  <div className="p-4 bg-slate-900 max-h-60 overflow-y-auto">
-                    <h3 className="text-sm font-bold text-indigo-400 mb-2 border-b border-slate-700 pb-1">📚 字典定義與詞性</h3>
-                    {selectedCard.meanings?.map((m, idx) => (
-                      <div key={idx} className="mb-3">
-                        <span className="inline-block px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs font-bold mb-1">{m.pos}</span>
-                        <ul className="list-disc list-inside text-sm text-slate-400">
-                          {m.defs.map((def, i) => <li key={i} className="line-clamp-2">{def}</li>)}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={() => setSelectedCard(null)} className="w-full py-3 bg-slate-700 hover:bg-slate-600 font-bold text-white transition-colors">關閉</button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // --- 競技場 ---
-      function ArenaView({ user, cards }) {
-        const [battleState, setBattleState] = useState('menu');
-        const [matchData, setMatchData] = useState(null);
-        const [battleResult, setBattleResult] = useState(null);
-
-        const myDeck = useMemo(() => [...cards].sort((a, b) => (b.atk + b.hp) - (a.atk + a.hp)).slice(0, 3), [cards]);
-        const myPower = myDeck.reduce((acc, c) => acc + c.atk + c.hp, 0);
-
-        const startPvE = () => {
-          setBattleState('battling');
-          const aiPower = Math.floor(myPower * (0.8 + Math.random() * 0.4));
-          setTimeout(() => {
-            setMatchData({ opponentName: 'AI 機器人', opponentPower: aiPower });
-            setBattleResult(myPower >= aiPower ? 'win' : 'lose');
-            setBattleState('result');
-          }, 2000);
-        };
-
-        const startPvP = async () => {
-          if (isLocal) {
-            alert("目前是單機模式，無法連線至線上對戰哦！請點擊左側的「對戰 AI」🤖");
-            return;
-          }
-          setBattleState('searching');
-          const matchesRef = collection(db, 'artifacts', appId, 'public', 'data', 'arena_matches');
-          
-          const unsubscribe = onSnapshot(matchesRef, async (snapshot) => {
-            if (battleState === 'battling' || battleState === 'result') return;
-            const allMatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            const waitingMatch = allMatches.find(m => m.status === 'waiting' && m.hostId !== user.uid);
-
-            if (waitingMatch) {
-              const matchDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'arena_matches', waitingMatch.id);
-              const isWin = myPower >= waitingMatch.hostPower;
-              await updateDoc(matchDocRef, {
-                guestId: user.uid, guestName: '玩家_' + user.uid.slice(0, 4), guestPower: myPower,
-                status: 'resolved', winnerId: isWin ? user.uid : waitingMatch.hostId
-              });
-              setMatchData({ opponentName: waitingMatch.hostName, opponentPower: waitingMatch.hostPower });
-              setBattleResult(isWin ? 'win' : 'lose');
-              setBattleState('result');
-              unsubscribe();
-            } else {
-              const existingHost = allMatches.find(m => m.status === 'waiting' && m.hostId === user.uid);
-              if (!existingHost) {
-                const newMatchRef = doc(matchesRef);
-                await setDoc(newMatchRef, {
-                  hostId: user.uid, hostName: '玩家_' + user.uid.slice(0, 4), hostPower: myPower,
-                  status: 'waiting', createdAt: Date.now()
-                });
-                const hostSub = onSnapshot(newMatchRef, (docSnap) => {
-                   const data = docSnap.data();
-                   if (data && data.status === 'resolved') {
-                      setMatchData({ opponentName: data.guestName, opponentPower: data.guestPower });
-                      setBattleResult(data.winnerId === user.uid ? 'win' : 'lose');
-                      setBattleState('result'); hostSub(); 
-                   }
-                });
-              }
-            }
-          });
-        };
-
-        if (battleState === 'searching') return <div className="text-center py-20"><div className="text-6xl animate-spin mb-6">🌀</div><h2 className="text-2xl font-bold animate-pulse text-indigo-400">正在尋找對手...</h2><button onClick={() => setBattleState('menu')} className="mt-8 text-slate-400 underline">取消搜尋</button></div>;
-        if (battleState === 'battling') return <div className="text-center py-20"><div className="text-6xl animate-bounce mb-6">⚔️</div><h2 className="text-2xl font-bold text-red-400">戰鬥交鋒中！</h2></div>;
-        if (battleState === 'result') return (
-          <div className="text-center py-10">
-            <h2 className={`text-5xl font-black mb-4 ${battleResult === 'win' ? 'text-yellow-400' : 'text-slate-500'}`}>{battleResult === 'win' ? '🏆 勝利！' : '💀 敗北'}</h2>
-            <div className="flex justify-center items-center gap-6 my-8">
-              <div className="bg-slate-800 p-4 rounded-xl border-2 border-indigo-500"><div className="text-sm text-slate-400">我的戰力</div><div className="text-3xl font-bold">{myPower}</div></div>
-              <div className="text-2xl font-black text-red-500">VS</div>
-              <div className="bg-slate-800 p-4 rounded-xl border-2 border-slate-600"><div className="text-sm text-slate-400">{matchData.opponentName}</div><div className="text-3xl font-bold">{matchData.opponentPower}</div></div>
-            </div>
-            <button onClick={() => setBattleState('menu')} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-8 rounded-full shadow-lg">返回競技場大廳</button>
-          </div>
-        );
-
-        return (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-br from-indigo-900 to-slate-800 p-6 rounded-2xl border border-indigo-500/30 text-center shadow-xl">
-              <h2 className="text-2xl font-black mb-2 text-indigo-300">⚔️ 我的出戰陣容</h2>
-              <div className="flex justify-center gap-2 mb-4">{myDeck.map((c, i) => <div key={i} className="w-1/3 transform scale-90 -mx-2"><WordCard card={c} compact={true}/></div>)}</div>
-              <div className="inline-block bg-slate-900/50 px-6 py-2 rounded-full border border-slate-700">總戰鬥力: <span className="text-xl font-bold text-yellow-400">{myPower}</span></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <button onClick={startPvE} className="bg-slate-800 hover:bg-slate-700 border border-slate-600 p-6 rounded-2xl flex flex-col items-center">
-                <span className="text-5xl mb-3">🤖</span><span className="text-xl font-bold">對戰 AI</span>
-              </button>
-              <button onClick={startPvP} className="bg-indigo-800 hover:bg-indigo-700 border border-indigo-500 p-6 rounded-2xl flex flex-col items-center">
-                <span className="text-5xl mb-3">🌍</span><span className="text-xl font-bold text-white">線上配對</span>
-              </button>
-            </div>
-          </div>
-        );
-      }
-
-      // --- 卡牌樣式 ---
-      function WordCard({ card, compact = false }) {
-        const bgColors = {
-          1: 'from-slate-600 to-slate-700 border-slate-500', 2: 'from-green-600 to-emerald-800 border-green-500',
-          3: 'from-blue-600 to-indigo-800 border-blue-500', 4: 'from-purple-600 to-fuchsia-800 border-purple-500',
-          5: 'from-yellow-500 to-orange-700 border-yellow-400', 6: 'from-red-600 to-rose-900 border-red-500',
-        };
-        const cardStyle = bgColors[card.stars] || bgColors[1];
-        return (
-          <div className={`bg-gradient-to-br ${cardStyle} p-1 rounded-xl shadow-lg relative flex flex-col`}>
-            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/20 pointer-events-none"></div>
-            <div className="bg-slate-900/60 backdrop-blur-sm rounded-lg p-3 flex-1 flex flex-col">
-              <div className={`text-yellow-400 tracking-widest text-center ${compact ? 'text-xs mb-1' : 'text-sm mb-2'}`}>
-                {'⭐'.repeat(card.stars) + '☆'.repeat(6 - card.stars)}
-              </div>
-              <div className={`font-black uppercase text-white text-center break-words leading-tight ${compact ? (card.word.length > 8 ? 'text-lg' : 'text-xl') : (card.word.length > 8 ? 'text-2xl' : 'text-4xl')}`}>{card.word}</div>
-              <div className={`text-slate-300 text-center font-medium mt-1 mb-3 ${compact ? 'text-xs line-clamp-1' : 'text-lg'}`}>{card.translation}</div>
-              <div className="mt-auto"></div>
-              <div className="flex justify-between items-center bg-slate-900/80 rounded px-2 py-1 mt-2">
-                 <div className="flex items-center text-red-400 font-bold"><span className={`${compact ? 'text-xs' : 'text-sm'} mr-1`}>❤️</span><span className={compact ? 'text-sm' : 'text-lg'}>{card.hp}</span></div>
-                 <div className="flex items-center text-blue-400 font-bold"><span className={`${compact ? 'text-xs' : 'text-sm'} mr-1`}>⚔️</span><span className={compact ? 'text-sm' : 'text-lg'}>{card.atk}</span></div>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      // 將 React 元件繪製到畫面上
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(<App />);
+// ── CEFR ─────────────────────────────────────────────────────
+async function fetchCEFR(word) {
+  try {
+    const res = await fetch(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(word)}`, { signal: AbortSignal.timeout(7000) });
+    if (res.ok) {
+      const html = await res.text();
+      const m = html.match(/class="[^"]*epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
+               || html.match(/data-level="([ABC][12])"/i)
+               || html.match(/>([ABC][12])<\/span>/i);
+      if (m) return m[1].toUpperCase();
     }
+  } catch(e) {}
+  const l = word.length;
+  return l<=4?'A1':l===5?'A2':l===6?'B1':l===7?'B2':l===8?'C1':'C2';
+}
 
-    // 等待 Firebase 載入完成後再啟動遊戲
-    if (window.FB) {
-      startApp();
+// ── Translation ───────────────────────────────────────────────
+async function fetchTranslation(word) {
+  try {
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|zh-TW`, { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const d = await r.json();
+      const t = d?.responseData?.translatedText;
+      if (t && !t.includes('MYMEMORY') && t.toLowerCase()!==word.toLowerCase() && t.length<30 && t.length>0) return t;
+    }
+  } catch(e) {}
+  for (const ep of ['https://libretranslate.de/translate','https://translate.argosopentech.com/translate']) {
+    try {
+      const r = await fetch(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({q:word,source:'en',target:'zh',format:'text'}), signal:AbortSignal.timeout(4000) });
+      if (r.ok) { const d = await r.json(); if (d?.translatedText && d.translatedText.toLowerCase()!==word.toLowerCase()) return d.translatedText; }
+    } catch(e) {}
+  }
+  try {
+    const r = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) {
+      const d = await r.json();
+      const pos = d?.[0]?.meanings?.[0]?.partOfSpeech;
+      const posMap = {noun:'名詞',verb:'動詞',adjective:'形容詞',adverb:'副詞',pronoun:'代名詞',preposition:'介係詞',conjunction:'連接詞'};
+      if (pos) return `(${posMap[pos]||pos})`;
+    }
+  } catch(e) {}
+  return word;
+}
+
+// ── Word Details ──────────────────────────────────────────────
+window.fetchWordDetails = async function(word) {
+  const wl = word.toLowerCase();
+  let translation = '', explanation = '', isRare = false, phonetic = '', enDef = '';
+
+  const [transResult, dictResult] = await Promise.allSettled([
+    fetchTranslation(wl),
+    fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${wl}`, { signal: AbortSignal.timeout(5000) })
+  ]);
+  translation = transResult.status==='fulfilled' ? transResult.value : wl;
+
+  if (dictResult.status==='fulfilled' && dictResult.value.ok) {
+    try {
+      const d = await dictResult.value.json();
+      phonetic = d?.[0]?.phonetic || d?.[0]?.phonetics?.[0]?.text || '';
+      enDef = d?.[0]?.meanings?.[0]?.definitions?.[0]?.definition || '';
+    } catch(e) {}
+  }
+
+  const cefr = await fetchCEFR(wl);
+
+  try {
+    const wr = await fetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=2&explaintext=1&titles=${encodeURIComponent(wl)}&format=json&origin=*`, { signal: AbortSignal.timeout(5000) });
+    const wd = await wr.json();
+    const pages = wd?.query?.pages; const pid = pages ? Object.keys(pages)[0] : '-1';
+    if (pid!=='-1' && pages[pid]?.extract) {
+      explanation = `【維基百科】${pages[pid].extract}`; isRare = true;
+      if (translation===wl || !translation) translation = pages[pid].title || wl;
+    }
+  } catch(e) {}
+
+  const parts = [];
+  if (phonetic) parts.push(`發音：${phonetic}`);
+  if (enDef) parts.push(`【英英字典】${enDef}`);
+  if (explanation) parts.push(explanation);
+  if (!parts.length) parts.push(`「${word}」的中文翻譯為「${translation}」。`);
+  if (cefr && !['???'].includes(cefr)) parts.push(`📖 劍橋學習者字典 CEFR 分級：${cefr}`);
+  explanation = parts.join('\n\n');
+
+  return { translation, explanation, isRare, cefr: cefr||'???' };
+};
+
+// ── Card HTML ─────────────────────────────────────────────────
+const THEMES = {
+  1:{b:'border-slate-600', g:'from-slate-900', s:'text-slate-400'},
+  2:{b:'border-emerald-700', g:'from-emerald-950', s:'text-emerald-400'},
+  3:{b:'border-blue-600', g:'from-blue-950', s:'text-blue-400'},
+  4:{b:'border-violet-600', g:'from-violet-950', s:'text-violet-400'},
+  5:{b:'border-yellow-500', g:'from-amber-950', s:'text-yellow-400'},
+};
+window.cardHTML = function(card, hidden=false) {
+  if (hidden) return `<div class="bg-[#111827] border border-slate-700 rounded-xl w-full aspect-[3/4] flex items-center justify-center"><i class="fas fa-lock text-slate-600 text-3xl"></i></div>`;
+  const t = THEMES[card.stars]||THEMES[1];
+  const stars = Array.from({length:5},(_,i)=>`<i class="fas fa-star text-[10px] ${i<card.stars?t.s:'text-slate-700'}"></i>`).join('');
+  const cc = ['A1','A2','B1','B2','C1','C2'].includes(card.cefr)?`cefr-${card.cefr}`:'cefr-X';
+  const lc = card.stars===5?'legend-glow':'';
+  const fs = card.word.length>9?'text-lg':card.word.length>6?'text-2xl':'text-3xl';
+  return `<div class="relative bg-gradient-to-b ${t.g} to-[#080d1a] border-2 ${t.b} rounded-xl p-3 w-full aspect-[3/4] flex flex-col items-center shadow-xl overflow-hidden ${lc}">
+    <div class="flex gap-0.5 mb-2">${stars}</div>
+    <div class="flex-1 flex items-center justify-center w-full px-1">
+      <h3 class="font-display ${fs} tracking-widest text-white text-center break-words w-full uppercase drop-shadow">${card.word}</h3>
+    </div>
+    <p class="text-xs text-slate-300 text-center w-full line-clamp-1 mb-1 px-1">${card.translation}</p>
+    <span class="cefr ${cc} mb-2">${card.cefr||'?'}</span>
+    <div class="bg-black/50 w-full rounded-lg p-2 flex justify-between text-xs font-bold border border-white/5">
+      <span class="text-rose-400 flex items-center gap-1"><i class="fas fa-heart text-[10px]"></i>${card.hp}</span>
+      <span class="text-indigo-300 flex items-center gap-1"><i class="fas fa-khanda text-[10px]"></i>${card.atk}</span>
+    </div>
+  </div>`;
+};
+
+// ── Hangman SVG (正確人體比例) ────────────────────────────────
+function hangmanSVG(mistakes) {
+  const show = n => mistakes>n ? 'show' : '';
+  // 死亡 X 眼
+  const deadEyes = mistakes>=6 ? `
+    <line x1="122" y1="56" x2="128" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="128" y1="56" x2="122" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="133" y1="56" x2="139" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="139" y1="56" x2="133" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>` : '';
+  return `<svg viewBox="0 0 200 230" width="190" height="190" xmlns="http://www.w3.org/2000/svg">
+    <!-- 底座 -->
+    <line x1="20" y1="215" x2="180" y2="215" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
+    <!-- 直柱 -->
+    <line x1="65" y1="215" x2="65" y2="18" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
+    <!-- 橫樑 -->
+    <line x1="65" y1="18" x2="135" y2="18" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
+    <!-- 懸繩 -->
+    <line x1="135" y1="18" x2="135" y2="40" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+    <!-- 斜撐 -->
+    <line x1="65" y1="52" x2="100" y2="18" stroke="#374151" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- 頭 (mistakes>=1) -->
+    <circle class="hm-head ${show(0)}" cx="135" cy="57" r="17" stroke="#f87171" stroke-width="3.5" fill="none"/>
+    ${deadEyes}
+    <!-- 身體 (mistakes>=2) -->
+    <line class="hm-part ${show(1)}" x1="135" y1="74" x2="135" y2="130" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- 左手臂 (mistakes>=3) -->
+    <line class="hm-part ${show(2)}" x1="135" y1="88" x2="112" y2="110" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- 右手臂 (mistakes>=4) -->
+    <line class="hm-part ${show(3)}" x1="135" y1="88" x2="158" y2="110" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- 左腿 (mistakes>=5) -->
+    <line class="hm-part ${show(4)}" x1="135" y1="130" x2="115" y2="165" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- 右腿 (mistakes>=6) -->
+    <line class="hm-part ${show(5)}" x1="135" y1="130" x2="155" y2="165" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+  </svg>`;
+}
+
+// ── Hangman Game ──────────────────────────────────────────────
+window.initHangman = async function() {
+  G.hm = { status:'loading', word:'', guessed:[], mistakes:0, maxMistakes:6, newCard:null, details:null };
+  renderHangman();
+  try {
+    let word = '';
+    if (Math.random() > 0.4) {
+      const topics = ['animals','technology','sports','science','astronomy','nature','food','music','geography'];
+      const t = topics[Math.floor(Math.random()*topics.length)];
+      const r = await fetch(`https://api.datamuse.com/words?ml=${t}&max=60`);
+      const d = await r.json();
+      const v = d.filter(x => x.word.length>=4 && x.word.length<=9 && /^[a-z]+$/i.test(x.word));
+      word = v[Math.floor(Math.random()*v.length)].word.toUpperCase();
     } else {
-      window.addEventListener('firebaseLoaded', startApp);
+      const len = Math.floor(Math.random()*5)+4;
+      const r = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`);
+      const d = await r.json();
+      word = d[0].toUpperCase();
     }
-  </script>
+    G.hm.word = word; G.hm.status = 'playing';
+  } catch(e) {
+    G.hm.word = 'CAMBRIDGE'; G.hm.status = 'playing';
+  }
+  renderHangman();
+};
+
+window.guess = function(letter) {
+  const hm = G.hm;
+  if (hm.status!=='playing' || hm.guessed.includes(letter)) return;
+  hm.guessed.push(letter);
+  if (!hm.word.includes(letter)) {
+    hm.mistakes++;
+    const wd = document.getElementById('word-disp');
+    if (wd) { wd.classList.add('anim-shake'); setTimeout(()=>wd.classList.remove('anim-shake'),400); }
+    if (hm.mistakes >= hm.maxMistakes) { hangmanOver('lost'); return; }
+  } else {
+    const won = hm.word.split('').every(c=>hm.guessed.includes(c));
+    if (won) { hangmanOver('won'); return; }
+  }
+  renderHangman();
+};
+
+async function hangmanOver(result) {
+  G.hm.status = 'saving'; renderHangman();
+  const word = G.hm.word.toLowerCase();
+  const details = await fetchWordDetails(word);
+  G.hm.details = details;
+  const len = word.length;
+  const hp = len*18+Math.floor(Math.random()*60)+100;
+  const atk = len*12+Math.floor(Math.random()*40)+50;
+  const stars = details.isRare ? 5 : Math.min(5, Math.max(1, Math.floor(len/1.8)));
+  const card = { word:G.hm.word, translation:details.translation, explanation:details.explanation, cefr:details.cefr, hp, atk, stars, isRare:details.isRare, createdAt:Date.now(), isNew:true };
+  G.hm.newCard = card;
+  if (result==='won') await addCard(card);
+  G.hm.status = result; renderHangman();
+}
+
+async function addCard(cardData) {
+  if (G.mode==='online' && fbUser && fbDb) {
+    try {
+      const ref = collection(fbDb,'artifacts',fbAppId,'users',fbUser.uid,'cards');
+      await addDoc(ref, cardData); return;
+    } catch(e) {}
+  }
+  cardData.id = Date.now().toString(36)+Math.random().toString(36).slice(2);
+  G.cards.unshift(cardData); saveLocal(); updateUI();
+}
+
+async function removeCard(cardId) {
+  if (G.mode==='online' && fbUser && fbDb) {
+    try { await deleteDoc(doc(fbDb,'artifacts',fbAppId,'users',fbUser.uid,'cards',cardId)); return; }
+    catch(e) {}
+  }
+  G.cards = G.cards.filter(c=>c.id!==cardId); saveLocal(); updateUI();
+}
+
+function renderHangman() {
+  const el = document.getElementById('hm-container'), hm = G.hm;
+  if (hm.status==='loading'||hm.status==='saving') {
+    el.innerHTML = `<div class="flex flex-col items-center my-24 text-center anim-fade">
+      <i class="fas ${hm.status==='saving'?'fa-magnifying-glass text-violet-400':'fa-spinner fa-spin text-indigo-400'} text-6xl mb-6"></i>
+      <p class="font-bold text-lg ${hm.status==='saving'?'text-violet-300':'text-indigo-300'}">${hm.status==='saving'?'正在查詢百科與翻譯...':'尋找單字中...'}</p>
+      ${hm.status==='saving'?'<p class="text-slate-500 text-sm mt-1">連接劍橋字典與字義資料庫</p>':''}
+    </div>`; return;
+  }
+  if (hm.status==='playing') {
+    const wordHTML = hm.word.split('').map(c=>{
+      const shown = hm.guessed.includes(c);
+      return `<span class="inline-flex items-end justify-center w-9 sm:w-11 border-b-[3px] ${shown?'border-indigo-400 text-white':'border-slate-600 text-transparent'} font-display text-2xl sm:text-3xl pb-0.5 mx-0.5">${shown?c:'_'}</span>`;
+    }).join('');
+    const keysHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c=>{
+      const used = hm.guessed.includes(c);
+      const correct = used && hm.word.includes(c);
+      const wrong = used && !hm.word.includes(c);
+      return `<button class="key-btn ${wrong?'wr':correct?'ok':''}" ${used?'disabled':''} onclick="guess('${c}')">${c}</button>`;
+    }).join('');
+    const remain = hm.maxMistakes-hm.mistakes;
+    el.innerHTML = `<div class="w-full flex flex-col items-center anim-fade">
+      ${hangmanSVG(hm.mistakes)}
+      <div class="flex items-center gap-1.5 mb-6 mt-1">
+        ${Array.from({length:hm.maxMistakes},(_,i)=>`<div class="w-3 h-3 rounded-full transition-colors ${i<remain?'bg-rose-400 shadow-[0_0_5px_rgba(248,113,113,.5)]':'bg-slate-800 border border-slate-700'}"></div>`).join('')}
+        <span class="text-slate-500 text-sm font-bold ml-1">剩餘 ${remain}</span>
+      </div>
+      <div id="word-disp" class="flex flex-wrap justify-center gap-y-4 mb-10 px-2">${wordHTML}</div>
+      <div class="grid grid-cols-7 gap-1.5 w-full max-w-xs sm:max-w-sm mb-4">${keysHTML}</div>
+    </div>`; return;
+  }
+  // 結算
+  const won = hm.status==='won', d = hm.details;
+  el.innerHTML = `<div class="flex flex-col items-center w-full anim-fade mt-2">
+    ${won
+      ?`<p class="font-display text-5xl text-emerald-400 tracking-widest mb-1">SUCCESS!</p>
+        <p class="text-emerald-300/60 text-sm mb-5">獲得新卡牌！</p>
+        ${hm.newCard?`<div class="w-40 mx-auto mb-5 anim-pop">${cardHTML(hm.newCard)}</div>`:''}
+        ${d?`<div class="bg-[#111827] border border-slate-700/40 rounded-2xl p-4 text-left w-full max-w-sm mb-6 anim-zoom relative shadow-lg">
+          <span class="absolute -top-3 left-4 bg-[#080d1a] px-2 text-[10px] font-bold text-indigo-400 border border-slate-700 rounded-full">📖 百科解釋</span>
+          <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap mt-1">${d.explanation}</p>
+        </div>`:''}`
+      :`<p class="font-display text-5xl text-rose-500 tracking-widest mb-1">DEAD</p>
+        <p class="text-slate-500 text-sm mb-5">小人被吊死了 &#9760;</p>
+        <div class="bg-[#0a1a0a] border border-emerald-800/40 rounded-2xl p-5 w-full max-w-sm mb-6 text-center anim-zoom">
+          <p class="text-emerald-500 text-xs font-bold mb-2">正確答案</p>
+          <p class="font-display text-4xl tracking-widest text-white mb-4">${hm.word}</p>
+          ${d?`<div class="text-left"><p class="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">${d.explanation}</p></div>`:''}
+        </div>`}
+    <button onclick="initHangman()" class="w-full max-w-sm py-4 rounded-2xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95">
+      再猜一次 <kbd class="hidden sm:inline text-xs bg-black/20 px-2 py-0.5 rounded border border-white/20 font-mono">Enter</kbd>
+    </button>
+  </div>`;
+}
+
+// ── Library ───────────────────────────────────────────────────
+function renderLibrary() {
+  const el = document.getElementById('lib-container');
+  G.cards.forEach(c=>{ if(c.isNew){ c.isNew=false; if(G.mode==='online'&&fbUser&&fbDb) updateDoc(doc(fbDb,'artifacts',fbAppId,'users',fbUser.uid,'cards',c.id),{isNew:false}).catch(()=>{}); }});
+  saveLocal(); updateUI();
+  if (!G.cards.length) { el.innerHTML=`<div class="col-span-2 text-center text-slate-600 py-20"><i class="fas fa-ghost text-4xl mb-4 block"></i>還沒有卡牌，快去猜單字吧！</div>`; return; }
+  el.innerHTML = G.cards.map(c=>`<div class="cursor-pointer transition-all hover:scale-105 hover:-translate-y-1" onclick="openCard('${c.id}')">${cardHTML(c)}</div>`).join('');
+}
+
+window.openCard = function(id) {
+  const c = G.cards.find(x=>x.id===id); if(!c) return;
+  const cc = ['A1','A2','B1','B2','C1','C2'].includes(c.cefr)?`cefr-${c.cefr}`:'cefr-X';
+  document.getElementById('card-modal-body').innerHTML = `
+    <div class="w-44 mx-auto mb-5 hover:scale-105 transition-transform">${cardHTML(c)}</div>
+    <div class="w-full bg-[#080d1a] rounded-2xl p-5 text-left border border-slate-800 shadow-inner">
+      <h4 class="text-indigo-400 font-bold mb-3 flex items-center gap-2"><i class="fas fa-book-journal-whills"></i>百科與字義解釋</h4>
+      <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">${c.explanation||'暫無解釋'}</p>
+      <div class="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
+        <span class="cefr ${cc}">CEFR ${c.cefr||'?'}</span>
+        <span class="text-xs text-slate-600"><i class="far fa-clock mr-1"></i>${new Date(c.createdAt).toLocaleDateString()}</span>
+      </div>
+    </div>`;
+  document.getElementById('card-modal').classList.remove('hidden');
+};
+window.closeModal = ()=>document.getElementById('card-modal').classList.add('hidden');
+
+// ── UI ────────────────────────────────────────────────────────
+function updateUI() {
+  document.getElementById('hdr-count').textContent = G.cards.length;
+  const btn = document.getElementById('tab-arena');
+  if (G.cards.length>=4) {
+    btn.disabled = false;
+    document.getElementById('arena-nav-icon').className = 'fas fa-swords text-2xl mb-0.5';
+    document.getElementById('arena-nav-label').textContent = '競技場';
+  }
+  const unseen = G.cards.filter(c=>c.isNew).length;
+  const b = document.getElementById('lib-badge');
+  if (unseen>0 && G.activeTab!=='library') { b.textContent=unseen; b.classList.remove('hidden'); } else b.classList.add('hidden');
+}
+
+window.switchTab = function(id) {
+  if (id==='arena'&&G.cards.length<4) return;
+  G.activeTab = id;
+  ['hangman','library','arena'].forEach(t=>{
+    document.getElementById(`view-${t}`).classList.add('hidden');
+    document.getElementById(`tab-${t}`).classList.remove('active');
+  });
+  document.getElementById(`view-${id}`).classList.remove('hidden');
+  document.getElementById(`tab-${id}`).classList.add('active');
+  if (id==='library') renderLibrary();
+  if (id==='arena') renderArena();
+};
+
+// ── Arena ─────────────────────────────────────────────────────
+window.toggleDeckCard = function(id) {
+  const idx = G.arena.deck.findIndex(c=>c.id===id);
+  if (idx>=0) G.arena.deck.splice(idx,1);
+  else if (G.arena.deck.length<4) G.arena.deck.push(G.cards.find(c=>c.id===id));
+  renderArena();
+};
+
+function renderArena() {
+  const el = document.getElementById('arena-container');
+  const v = G.arena.view;
+  if (v==='deck_select') renderDeckSelect(el);
+  else if (v==='ai_battle') renderAIBattle(el);
+  else if (v==='lobby') renderLobby(el);
+  else if (v==='room') renderRoom(el);
+}
+
+function renderDeckSelect(el) {
+  const {deck} = G.arena;
+  const slots = deck.map(c=>`
+    <div class="relative cursor-pointer hover:-translate-y-2 transition-transform" onclick="toggleDeckCard('${c.id}')">
+      <div class="absolute -top-1 -right-1 bg-rose-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-10"><i class="fas fa-times"></i></div>
+      <div class="scale-[0.72] origin-top-left" style="margin-right:-28px">${cardHTML(c)}</div>
+    </div>`).join('');
+  const cardList = G.cards.map(c=>{
+    const sel = deck.find(x=>x.id===c.id);
+    return `<div onclick="toggleDeckCard('${c.id}')" class="cursor-pointer transition-all ${sel?'ring-2 ring-indigo-500 scale-95 opacity-40 rounded-xl':'hover:scale-105'}">${cardHTML(c)}</div>`;
+  }).join('');
+  el.innerHTML = `<div class="anim-fade pb-10">
+    <h2 class="font-display text-3xl tracking-widest text-center text-indigo-300 mb-1">BUILD DECK</h2>
+    <p class="text-slate-500 text-sm text-center mb-4">選擇 <strong class="text-white text-base">${deck.length}/4</strong> 張 · 三局兩勝 · 贏了搶對手一張，輸了失去一張！</p>
+    <div class="flex gap-2 justify-start min-h-[130px] p-4 bg-[#111827] rounded-2xl border border-slate-700/50 mb-4 overflow-x-auto no-sb items-start">
+      ${deck.length?slots:`<div class="text-slate-600 m-auto flex flex-col items-center gap-2 w-full text-center"><i class="fas fa-hand-pointer text-2xl"></i>點擊下方卡牌加入</div>`}
+    </div>
+    <div class="grid grid-cols-2 gap-3 mb-5">
+      <button onclick="startAIBattle()" ${deck.length<4?'disabled':''} class="py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${deck.length===4?'bg-violet-700 hover:bg-violet-600 text-white active:scale-95 shadow-lg shadow-violet-900/30':'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700'}">
+        <i class="fas fa-robot"></i>單機 vs AI
+      </button>
+      <button onclick="enterLobby()" ${deck.length<4?'disabled':''} class="py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${deck.length===4?'bg-indigo-700 hover:bg-indigo-600 text-white active:scale-95 shadow-lg shadow-indigo-900/30':'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700'}">
+        <i class="fas fa-globe"></i>連線對戰
+      </button>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cardList}</div>
+  </div>`;
+}
+
+// ── AI Battle ─────────────────────────────────────────────────
+window.startAIBattle = function() {
+  if (G.arena.deck.length<4) return;
+  // AI 從玩家所有牌中隨機選4張（不一樣）
+  const pool = [...G.cards].sort(()=>Math.random()-.5);
+  const aiDeck = pool.slice(0, Math.min(4, pool.length));
+  while (aiDeck.length<4) aiDeck.push(G.arena.deck[aiDeck.length%4]);
+  G.arena.aiState = { deck: aiDeck, currentIdx:null, wins:0, usedCards:[] };
+  G.arena.myAiState = { deck:[...G.arena.deck], currentIdx:null, wins:0, usedCards:[] };
+  G.arena.roundResult = null; G.arena.aiRound=1; G.arena.aiMyWins=0; G.arena.aiOpWins=0;
+  G.arena.view = 'ai_battle'; renderArena();
+};
+
+function renderAIBattle(el) {
+  const me = G.arena.myAiState, ai = G.arena.aiState;
+  const rr = G.arena.roundResult;
+  const fin = G.arena.aiMyWins>=2 || G.arena.aiOpWins>=2 || G.arena.aiRound>3;
+
+  if (fin) {
+    const won = G.arena.aiMyWins > G.arena.aiOpWins;
+    const tied = G.arena.aiMyWins === G.arena.aiOpWins;
+    let body = '';
+    if (!tied && won) {
+      const avail = ai.deck.filter((_,i)=>!ai.usedCards.includes(i));
+      const stolen = avail.length ? avail[Math.floor(Math.random()*avail.length)] : ai.deck[0];
+      const stolenJSON = JSON.stringify({...stolen, id:undefined, isNew:true, createdAt:0});
+      body = `<p class="font-display text-5xl text-yellow-400 tracking-widest mb-2">VICTORY!</p>
+        <p class="text-yellow-300/70 text-sm mb-5">搶到 AI 的一張卡牌！</p>
+        <div class="w-40 mx-auto mb-5 anim-pop">${cardHTML(stolen)}</div>
+        <p class="text-slate-300 text-sm mb-5">「${stolen.word}」加入你的收藏！</p>
+        <button onclick='handleAIWin(${stolenJSON})' class="w-full py-4 rounded-2xl bg-yellow-600 hover:bg-yellow-500 font-bold text-lg active:scale-95 shadow-lg transition-all">收下卡牌並返回</button>`;
+    } else if (!tied && !won) {
+      const avail2 = me.deck.filter((_,i)=>!me.usedCards.includes(i));
+      const lost = avail2.length ? avail2[Math.floor(Math.random()*avail2.length)] : me.deck[0];
+      body = `<p class="font-display text-5xl text-rose-500 tracking-widest mb-2">DEFEAT</p>
+        <p class="text-rose-400/70 text-sm mb-5">失去了一張卡牌...</p>
+        <div class="w-40 mx-auto mb-5 opacity-40 grayscale">${cardHTML(lost)}</div>
+        <p class="text-slate-400 text-sm mb-5">「${lost.word}」被 AI 奪走了</p>
+        <button onclick="handleAILose('${lost.id}')" class="w-full py-4 rounded-2xl bg-rose-700 hover:bg-rose-600 font-bold text-lg active:scale-95 transition-all">承認失敗並返回</button>`;
+    } else {
+      body = `<p class="font-display text-5xl text-slate-300 tracking-widest mb-4">DRAW</p>
+        <p class="text-slate-500 text-sm mb-6">平局！各自保留卡牌</p>
+        <button onclick="G.arena.view='deck_select';renderArena()" class="w-full py-4 rounded-2xl bg-slate-700 hover:bg-slate-600 font-bold text-lg active:scale-95">返回</button>`;
+    }
+    el.innerHTML = `<div class="max-w-sm mx-auto anim-zoom text-center">${body}</div>`; return;
+  }
+
+  const myReady = me.currentIdx!==null;
+  const handHTML = me.deck.map((c,i)=>{
+    const used = me.usedCards.includes(i), sel = me.currentIdx===i;
+    return `<div onclick="${!used&&!myReady?`pickAICard(${i})`:'void 0'}" class="shrink-0 w-[90px] cursor-${used||myReady?'default':'pointer'} transition-all ${used?'opacity-20 grayscale scale-90':sel?'ring-2 ring-indigo-400 -translate-y-4 rounded-xl scale-105':myReady?'opacity-60':'hover:-translate-y-3 hover:scale-105'}">${cardHTML(c)}</div>`;
+  }).join('');
+
+  let battleArea = '';
+  if (rr) {
+    battleArea = `<div class="flex items-center justify-center gap-4 py-4 anim-zoom">
+      <div class="relative w-32"><div class="opacity-80">${cardHTML(rr.aiCard)}</div><div class="absolute -bottom-3 right-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm rotate-3 border border-white/20">-${rr.myDmg}</div></div>
+      <div class="font-display text-3xl text-yellow-400/70">VS</div>
+      <div class="relative w-32"><div class="opacity-80">${cardHTML(rr.myCard)}</div><div class="absolute -bottom-3 left-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm -rotate-3 border border-white/20">-${rr.aiDmg}</div></div>
+    </div>
+    <p class="text-center text-sm font-bold mb-2 ${rr.myCard.hp-rr.aiDmg > rr.aiCard.hp-rr.myDmg?'text-emerald-400':'rr.myCard.hp-rr.aiDmg===rr.aiCard.hp-rr.myDmg?\'text-slate-400\'':'text-rose-400'}">
+      ${rr.myCard.hp-rr.aiDmg > rr.aiCard.hp-rr.myDmg ? '🏆 這局獲勝！' : rr.myCard.hp-rr.aiDmg===rr.aiCard.hp-rr.myDmg ? '⚖ 平局' : '💀 這局落敗'}
+    </p>`;
+  } else if (myReady) {
+    battleArea = `<div class="text-center py-6 text-slate-500 anim-fade"><i class="fas fa-spinner fa-spin text-indigo-400 text-3xl mb-2 block"></i>AI 思考中...</div>`;
+  } else {
+    battleArea = `<div class="text-center py-6 text-slate-600 italic text-sm">從下方選擇出戰卡牌</div>`;
+  }
+
+  el.innerHTML = `<div class="anim-fade max-w-sm mx-auto">
+    <div class="flex justify-between items-center mb-4 bg-[#111827] p-3 rounded-2xl border border-slate-700/50 shadow">
+      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">我方</p><p class="text-2xl font-bold text-blue-400">${G.arena.aiMyWins}</p></div>
+      <div class="text-center"><p class="text-xs text-slate-600 font-bold uppercase tracking-widest">Round</p><p class="text-xl font-bold">${Math.min(G.arena.aiRound,3)}/3</p></div>
+      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">AI</p><p class="text-2xl font-bold text-rose-400">${G.arena.aiOpWins}</p></div>
+    </div>
+    <div class="bg-[#111827] rounded-2xl border border-slate-700/30 min-h-[220px] flex flex-col justify-center px-4">${battleArea}</div>
+    <div class="mt-3 ${myReady||rr?'opacity-50 pointer-events-none':''}">
+      <p class="text-center text-xs text-slate-500 mb-2 font-bold">${myReady?'等待 AI...':'選擇出戰卡牌'}</p>
+      <div class="flex gap-2 justify-center overflow-x-auto no-sb py-2 px-1 min-h-[120px] items-end">${handHTML}</div>
+    </div>
+  </div>`;
+}
+
+window.pickAICard = function(idx) {
+  const me = G.arena.myAiState;
+  if (me.currentIdx!==null || me.usedCards.includes(idx)) return;
+  me.currentIdx = idx; renderArena();
+  setTimeout(()=>{
+    const ai = G.arena.aiState;
+    const avail = ai.deck.map((_,i)=>i).filter(i=>!ai.usedCards.includes(i));
+    ai.currentIdx = avail[Math.floor(Math.random()*avail.length)] ?? 0;
+    resolveAIRound();
+  }, 800+Math.random()*700);
+};
+
+function resolveAIRound() {
+  const me = G.arena.myAiState, ai = G.arena.aiState;
+  const mc = me.deck[me.currentIdx], ac = ai.deck[ai.currentIdx];
+  const aiDmg = ac.atk, myDmg = mc.atk;
+  G.arena.roundResult = { myCard:mc, aiCard:ac, myDmg, aiDmg };
+  if (mc.hp-aiDmg > ac.hp-myDmg) G.arena.aiMyWins++;
+  else if (ac.hp-myDmg > mc.hp-aiDmg) G.arena.aiOpWins++;
+  me.usedCards.push(me.currentIdx); ai.usedCards.push(ai.currentIdx);
+  G.arena.aiRound++;
+  renderArena();
+  setTimeout(()=>{ me.currentIdx=null; ai.currentIdx=null; G.arena.roundResult=null; renderArena(); }, 2800);
+}
+
+window.handleAIWin = async function(stolenCard) {
+  stolenCard.createdAt = Date.now();
+  await addCard(stolenCard);
+  toast(`獲得 ${stolenCard.word}！`);
+  G.arena.view = 'deck_select'; G.arena.deck = []; renderArena();
+};
+window.handleAILose = async function(lostId) {
+  await removeCard(lostId);
+  toast('失去了一張卡牌...', true);
+  G.arena.view = 'deck_select'; G.arena.deck = []; renderArena();
+};
+
+// ── Online Lobby ──────────────────────────────────────────────
+window.enterLobby = function() {
+  if (G.mode!=='online') { toast('需要連線才能進入連線大廳！', true); return; }
+  G.arena.view = 'lobby';
+  if (fbUnsubMatches) fbUnsubMatches();
+  const ref = collection(fbDb,'artifacts',fbAppId,'public','data','matches');
+  fbUnsubMatches = onSnapshot(ref, snap=>{
+    const all = snap.docs.map(d=>({id:d.id,...d.data()}));
+    G.arena.rooms = all.filter(m=>m.status==='waiting'&&m.player1!==fbUser.uid);
+    if (G.arena.matchId) {
+      const mine = all.find(m=>m.id===G.arena.matchId);
+      if (mine) {
+        G.arena.matchData = mine;
+        if (mine.status==='playing') G.arena.view='room';
+        if (mine.player1===fbUser.uid && mine.status==='playing' && mine.p1State?.ready && mine.p2State?.ready && !mine.resolving)
+          resolveOnlineRound(mine.id, mine);
+      } else { G.arena.matchId=null; G.arena.matchData=null; G.arena.view='lobby'; }
+    }
+    if (G.activeTab==='arena') renderArena();
+  });
+  renderArena();
+};
+
+function renderLobby(el) {
+  const rooms = G.arena.rooms;
+  const roomsHTML = rooms.length
+    ? rooms.map(r=>`<div class="bg-[#111827] border border-slate-700/50 p-4 rounded-xl flex justify-between items-center shadow">
+        <div class="flex items-center gap-3"><i class="fas fa-spinner fa-spin text-indigo-400 text-lg"></i><span class="font-bold">${r.p1Name||'玩家'}<span class="text-slate-500 text-sm font-normal ml-1">的擂台</span></span></div>
+        <button onclick="joinRoom('${r.id}')" class="bg-emerald-700 hover:bg-emerald-600 px-5 py-2 rounded-lg font-bold shadow active:scale-95 transition-all">加入</button>
+      </div>`).join('')
+    : `<div class="text-center text-slate-600 py-12 bg-[#111827]/50 rounded-2xl border border-slate-700/30 border-dashed">還沒有房間，自己開一個吧！</div>`;
+  el.innerHTML = `<div class="anim-fade max-w-md mx-auto">
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="font-display text-2xl tracking-widest text-indigo-300">ONLINE LOBBY</h2>
+      <button onclick="G.arena.view='deck_select';renderArena()" class="text-xs text-slate-400 bg-slate-800 px-3 py-1.5 rounded-full hover:bg-slate-700 transition-colors">重新選牌</button>
+    </div>
+    <button onclick="createRoom()" class="w-full bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-4 rounded-2xl mb-6 flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
+      <i class="fas fa-plus-circle text-xl"></i>創建房間
+    </button>
+    <div class="space-y-3">${roomsHTML}</div>
+  </div>`;
+}
+
+window.createRoom = async function() {
+  const ref = collection(fbDb,'artifacts',fbAppId,'public','data','matches');
+  const n = await addDoc(ref,{status:'waiting',player1:fbUser.uid,p1Name:'玩家'+fbUser.uid.slice(-4),
+    p1State:{team:G.arena.deck,currentCardIndex:null,wins:0,ready:false,usedCards:[]},round:1,resolving:false,createdAt:Date.now()});
+  G.arena.matchId = n.id; G.arena.view = 'room'; renderArena();
+};
+window.joinRoom = async function(id) {
+  const ref = doc(fbDb,'artifacts',fbAppId,'public','data','matches',id);
+  await updateDoc(ref,{status:'playing',player2:fbUser.uid,p2Name:'玩家'+fbUser.uid.slice(-4),
+    p2State:{team:G.arena.deck,currentCardIndex:null,wins:0,ready:false,usedCards:[]}});
+  G.arena.matchId = id; G.arena.view = 'room'; renderArena();
+};
+window.leaveRoom = async function() {
+  if (G.arena.matchId && G.arena.matchData?.player1===fbUser.uid && G.arena.matchData?.status==='waiting')
+    await deleteDoc(doc(fbDb,'artifacts',fbAppId,'public','data','matches',G.arena.matchId));
+  G.arena.matchId=null; G.arena.matchData=null; G.arena.view='lobby'; renderArena();
+};
+
+function renderRoom(el) {
+  const match = G.arena.matchData; if (!match) return;
+  const isP1 = match.player1===fbUser.uid;
+  const mySt = isP1?match.p1State:match.p2State;
+  const opSt = isP1?match.p2State:match.p1State;
+  const fin = match.status==='finished';
+  const res = match.resolving;
+  const lr = match.lastResult;
+
+  if (match.status==='waiting') {
+    el.innerHTML = `<div class="flex flex-col items-center py-24 anim-fade text-center">
+      <i class="fas fa-circle-notch fa-spin text-indigo-500 text-7xl mb-8"></i>
+      <h2 class="text-2xl font-bold mb-2">等待對手加入...</h2>
+      <p class="text-slate-500 mb-10">你的擂台已準備好</p>
+      <button onclick="leaveRoom()" class="px-8 py-3 border border-rose-500/40 text-rose-400 font-bold rounded-full hover:bg-rose-900/20 transition-colors">取消並離開</button>
+    </div>`; return;
+  }
+
+  let opZone = '', myZone = '';
+  if (res && lr) {
+    const opCard = isP1?lr.p2Card:lr.p1Card, myCard = isP1?lr.p1Card:lr.p2Card;
+    const opDmg = isP1?lr.p1Dmg:lr.p2Dmg, myDmg = isP1?lr.p2Dmg:lr.p1Dmg;
+    opZone = `<div class="relative w-32"><div class="opacity-80">${cardHTML(opCard)}</div><div class="absolute -bottom-3 right-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm rotate-6 border border-white/10">-${myDmg}</div></div>`;
+    myZone = `<div class="relative w-32"><div class="opacity-80">${cardHTML(myCard)}</div><div class="absolute -bottom-3 left-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm -rotate-6 border border-white/10">-${opDmg}</div></div>`;
+  } else {
+    opZone = opSt.ready ? `<div class="w-32">${cardHTML({},true)}</div>` : `<div class="w-32 aspect-[3/4] border border-dashed border-slate-700 rounded-xl flex items-center justify-center text-slate-600 text-sm bg-[#111827]/50"><i class="fas fa-ellipsis animate-pulse text-xl"></i></div>`;
+    myZone = mySt.ready ? `<div class="w-32">${cardHTML(mySt.team[mySt.currentCardIndex])}</div>` : `<div class="w-32 aspect-[3/4] border-2 border-dashed border-indigo-500/40 rounded-xl flex items-center justify-center text-indigo-500/70 font-bold text-sm text-center px-2">點擊<br>選擇出牌</div>`;
+  }
+
+  let finHTML = '';
+  if (fin) {
+    const won = mySt.wins>opSt.wins, tied = mySt.wins===opSt.wins;
+    if (!tied && won) {
+      const stolen = opSt.team[Math.floor(Math.random()*opSt.team.length)];
+      const sj = JSON.stringify({...stolen, id:undefined, isNew:true, createdAt:0});
+      finHTML = `<div class="text-center mt-4 anim-zoom">
+        <p class="font-display text-4xl text-yellow-400 mb-2">VICTORY!</p>
+        <p class="text-slate-300 text-sm mb-4">搶到對手的一張卡牌！</p>
+        <div class="w-36 mx-auto mb-4 anim-pop">${cardHTML(stolen)}</div>
+        <button onclick='handleOnlineWin(${sj})' class="w-full py-3 rounded-xl bg-yellow-600 hover:bg-yellow-500 font-bold text-base active:scale-95 transition-all shadow-lg">收下並返回大廳</button>
+      </div>`;
+    } else if (!tied && !won) {
+      const lost = mySt.team[Math.floor(Math.random()*mySt.team.length)];
+      finHTML = `<div class="text-center mt-4 anim-zoom">
+        <p class="font-display text-4xl text-rose-500 mb-2">DEFEAT</p>
+        <p class="text-slate-400 text-sm mb-4">失去了一張卡牌...</p>
+        <div class="w-36 mx-auto mb-4 opacity-40 grayscale">${cardHTML(lost)}</div>
+        <button onclick="handleOnlineLose('${lost.id}')" class="w-full py-3 rounded-xl bg-rose-700 hover:bg-rose-600 font-bold text-base active:scale-95 transition-all">承認失敗並返回</button>
+      </div>`;
+    } else {
+      finHTML = `<div class="text-center mt-4 anim-zoom">
+        <p class="font-display text-4xl text-slate-300 mb-4">DRAW</p>
+        <button onclick="leaveRoom()" class="w-full py-3 rounded-xl bg-slate-700 font-bold text-base active:scale-95">返回大廳</button>
+      </div>`;
+    }
+  }
+
+  const handHTML = !fin ? mySt.team.map((c,i)=>{
+    const used = mySt.usedCards?.includes(i), sel = mySt.currentCardIndex===i;
+    return `<div onclick="${!used&&!mySt.ready?`playOnlineCard(${i})`:'void 0'}" class="shrink-0 w-[90px] cursor-${used||mySt.ready?'default':'pointer'} transition-all ${used?'opacity-20 grayscale scale-90':sel?'ring-2 ring-indigo-400 -translate-y-4 rounded-xl scale-105':mySt.ready?'opacity-60':'hover:-translate-y-3 hover:scale-105'}">${cardHTML(c)}</div>`;
+  }).join('') : '';
+
+  el.innerHTML = `<div class="anim-fade max-w-sm mx-auto">
+    <div class="flex justify-between items-center mb-4 bg-[#111827] p-3 rounded-2xl border border-slate-700/50 shadow">
+      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">我方</p><p class="text-2xl font-bold text-blue-400">${mySt.wins}</p></div>
+      <div class="text-center"><p class="text-xs text-slate-600 font-bold uppercase tracking-widest">Round</p><p class="text-xl font-bold">${Math.min(match.round,3)}/3</p></div>
+      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">對手</p><p class="text-2xl font-bold text-rose-400">${opSt.wins}</p></div>
+    </div>
+    <div class="flex items-center justify-around py-6 bg-[#111827] rounded-2xl border border-slate-700/30 min-h-[220px]">
+      ${opZone}<div class="font-display text-2xl text-yellow-400/50">VS</div>${myZone}
+    </div>
+    ${finHTML||`<div class="${mySt.ready||res?'opacity-50 pointer-events-none':''} mt-3">
+      <p class="text-center text-xs text-slate-500 mb-2 font-bold">${mySt.ready?'等待對手出牌...':'選擇出戰卡牌'}</p>
+      <div class="flex gap-2 justify-center overflow-x-auto no-sb py-2 px-1 min-h-[120px] items-end">${handHTML}</div>
+    </div>`}
+  </div>`;
+}
+
+window.playOnlineCard = async function(idx) {
+  if (!G.arena.matchId||!fbDb) return;
+  const isP1 = G.arena.matchData.player1===fbUser.uid;
+  const ref = doc(fbDb,'artifacts',fbAppId,'public','data','matches',G.arena.matchId);
+  if (isP1) await updateDoc(ref,{'p1State.currentCardIndex':idx,'p1State.ready':true});
+  else       await updateDoc(ref,{'p2State.currentCardIndex':idx,'p2State.ready':true});
+};
+window.handleOnlineWin = async function(c) { c.createdAt=Date.now(); await addCard(c); toast(`搶到 ${c.word}！`); leaveRoom(); };
+window.handleOnlineLose = async function(id) { await removeCard(id); toast('失去了一張卡牌...', true); leaveRoom(); };
+
+async function resolveOnlineRound(id, match) {
+  const ref = doc(fbDb,'artifacts',fbAppId,'public','data','matches',id);
+  await updateDoc(ref,{resolving:true});
+  const p1c=match.p1State.team[match.p1State.currentCardIndex], p2c=match.p2State.team[match.p2State.currentCardIndex];
+  const p1dmg=p1c.atk, p2dmg=p2c.atk, p1r=p1c.hp-p2dmg, p2r=p2c.hp-p1dmg;
+  let p1w=match.p1State.wins, p2w=match.p2State.wins;
+  if (p1r>p2r) p1w++; else if (p2r>p1r) p2w++;
+  const nextRound=match.round+1, done=p1w>=2||p2w>=2||nextRound>3;
+  setTimeout(async()=>{
+    await updateDoc(ref,{status:done?'finished':'playing',round:nextRound,resolving:false,
+      'p1State.wins':p1w,'p2State.wins':p2w,'p1State.ready':false,'p2State.ready':false,
+      'p1State.usedCards':[...match.p1State.usedCards,match.p1State.currentCardIndex],
+      'p2State.usedCards':[...match.p2State.usedCards,match.p2State.currentCardIndex],
+      'p1State.currentCardIndex':null,'p2State.currentCardIndex':null,
+      lastResult:{round:match.round,p1Card:p1c,p2Card:p2c,p1Dmg:p1dmg,p2Dmg:p2dmg}});
+  },3000);
+}
+
+// ── Keyboard ──────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if (G.activeTab!=='hangman') return;
+  if (G.hm.status==='playing' && /^[a-zA-Z]$/.test(e.key)) guess(e.key.toUpperCase());
+  if ((G.hm.status==='won'||G.hm.status==='lost') && e.key==='Enter') initHangman();
+});
+
+// ── Bootstrap ─────────────────────────────────────────────────
+loadLocal(); updateUI();
+initFirebase();
+// 5秒後若未連線，確保單機也能正常啟動
+setTimeout(()=>{ if (G.hm.status==='loading') { initHangman(); } }, 5000);
+initHangman(); // 直接啟動，不等 Firebase
+</script>
 </body>
 </html>
