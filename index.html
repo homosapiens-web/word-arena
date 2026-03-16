@@ -2,879 +2,1475 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>單字卡牌大亂鬥 Word Arena</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>單字大亂鬥 · Word Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+TC:wght@400;700;900&display=swap');
-*{box-sizing:border-box}
-body{font-family:'Noto Sans TC',sans-serif;background:#080d1a;color:#fff;min-height:100vh;padding-bottom:72px}
-.font-display{font-family:'Bebas Neue',sans-serif}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
-@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-@keyframes slideDown{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
-@keyframes zoomIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
-@keyframes popBounce{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+:root{
+  --bg:#09090f;--bg2:#11111d;--bg3:#1a1a2e;
+  --border:#2a2a45;--accent:#7c6aff;--accent2:#ff6ab0;
+  --text:#e8e8f8;--muted:#6b6b9a;--danger:#ff4d6d;--ok:#00d68f;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);
+     display:flex;flex-direction:column;-webkit-tap-highlight-color:transparent}
+.ko{font-family:'Black Han Sans',sans-serif}
+.scr{overflow-y:auto;overflow-x:hidden}
+.scr::-webkit-scrollbar{width:3px}
+.scr::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+
+/* ── layout ── */
+#hdr{flex-shrink:0;background:var(--bg2);border-bottom:1px solid var(--border);
+     padding:10px 16px;display:flex;align-items:center;justify-content:space-between;z-index:100}
+#main{flex:1;overflow:hidden;position:relative}
+.view{position:absolute;inset:0;display:none;flex-direction:column}
+.view.on{display:flex}
+#nav{flex-shrink:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;z-index:100}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:10px 4px 8px;gap:3px;border:none;background:none;color:var(--muted);
+    font-size:10px;cursor:pointer;font-family:inherit;transition:color .2s;position:relative}
+.nb.on{color:var(--accent)}
+.nb.lk{opacity:.3;cursor:not-allowed}
+.nbadge{position:absolute;top:5px;right:calc(50% - 22px);background:var(--danger);
+        color:#fff;font-size:9px;font-weight:900;width:15px;height:15px;border-radius:50%;
+        display:none;align-items:center;justify-content:center}
+
+/* ── toast ── */
+#twrap{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:9999;
+       display:flex;flex-direction:column;gap:6px;width:min(92vw,340px);pointer-events:none}
+.toast{background:var(--bg3);border:1px solid var(--border);padding:10px 16px;
+       border-radius:999px;font-size:13px;font-weight:700;
+       display:flex;align-items:center;gap:8px;
+       animation:tIn .3s ease;box-shadow:0 8px 24px #0009}
+@keyframes tIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* ── cards ── */
+.ci{width:100%;height:100%;display:flex;flex-direction:column;padding:8px 7px 7px;
+    background:var(--bg2);border:2px solid var(--border);border-radius:14px;
+    position:relative;overflow:hidden}
+.ci::before{content:'';position:absolute;inset:0;
+            background:radial-gradient(ellipse at 50% 0%,var(--cg,transparent) 0%,transparent 70%);
+            pointer-events:none}
+.cstars{display:flex;gap:2px;justify-content:center;margin-bottom:4px}
+.cword{font-family:'Black Han Sans',sans-serif;text-align:center;letter-spacing:2px;
+       color:#fff;flex:1;display:flex;align-items:center;justify-content:center;
+       line-height:1.1;text-shadow:0 2px 14px var(--cg,transparent)}
+.ctr{font-size:10px;text-align:center;color:var(--muted);margin-bottom:3px;line-height:1.3;
+     overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical}
+.cchip{font-size:8px;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:999px;
+       border:1px solid;align-self:center;margin-bottom:5px}
+.cstats{display:flex;justify-content:space-between;background:#ffffff08;border-radius:7px;
+        padding:4px 7px;font-size:11px;font-weight:800;border:1px solid #ffffff08}
+.shp{color:#ff6b6b}.satk{color:#74b9ff}
+.s1{--cg:#94a3b828;border-color:#94a3b842!important}
+.s2{--cg:#4ade8035;border-color:#4ade8050!important}
+.s3{--cg:#60a5fa38;border-color:#60a5fa52!important}
+.s4{--cg:#a78bfa48;border-color:#a78bfa60!important}
+.s5{--cg:#fb923c58;border-color:#fb923c6a!important}
+.s6{--cg:#facc1565;border-color:#facc1578!important;box-shadow:0 0 20px #facc1518}
+
+/* ── hangman view ── */
+#hm-inner{display:flex;flex-direction:column;align-items:center;gap:10px;
+          padding:12px 16px 20px;overflow-y:auto;flex:1}
+#hm-status{font-size:12px;color:var(--muted);letter-spacing:1px;font-weight:700;min-height:16px}
+#wdisp{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.lslot{width:34px;height:42px;border-bottom:3px solid var(--muted);
+       display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;
+       font-family:'Black Han Sans',sans-serif;font-size:20px;color:#fff;transition:border-color .2s}
+.lslot.rev{border-color:var(--accent)}
+#kb{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;width:100%;max-width:360px}
+.key{width:calc(14.28% - 5px);min-width:34px;height:36px;border-radius:8px;
+     border:1px solid var(--border);background:var(--bg3);color:var(--text);
+     font-family:'Black Han Sans',sans-serif;font-size:14px;cursor:pointer;transition:all .15s}
+.key:active{transform:scale(.88)}
+.key.hit{background:var(--accent);border-color:var(--accent);color:#fff}
+.key.miss{background:var(--bg2);border-color:#222233;color:var(--muted);cursor:default}
+
+/* ── result overlay ── */
+#roverlay{position:absolute;inset:0;z-index:50;background:var(--bg);display:none;
+          flex-direction:column;align-items:center;overflow-y:auto;padding:16px 16px 88px}
+#roverlay.on{display:flex}
+
+/* ── library ── */
+#libgrid{flex:1;overflow-y:auto;padding:10px;display:grid;
+         grid-template-columns:repeat(3,1fr);gap:9px;align-content:start}
+@media(min-width:480px){#libgrid{grid-template-columns:repeat(4,1fr)}}
+.cw{aspect-ratio:3/4;border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .2s}
+.cw:hover{transform:translateY(-4px)}
+
+/* ── modal ── */
+#mbg{position:fixed;inset:0;z-index:200;background:#000c;backdrop-filter:blur(8px);
+     display:none;align-items:flex-end;justify-content:center}
+#mbg.on{display:flex}
+#mbox{background:var(--bg2);border:1px solid var(--border);border-radius:24px 24px 0 0;
+      width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
+      padding:16px 16px 40px;animation:sUp .3s cubic-bezier(.22,.68,0,1.2)}
+@keyframes sUp{from{transform:translateY(100%)}to{transform:none}}
+.dsec{background:var(--bg3);border-radius:12px;padding:13px;margin-bottom:10px;border:1px solid var(--border)}
+.dlbl{font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:8px;text-transform:uppercase}
+.ptag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;
+      background:#7c6aff25;color:var(--accent);border:1px solid #7c6aff40;margin-bottom:5px}
+.ddef{font-size:13px;color:var(--text);line-height:1.65;margin-bottom:2px}
+.dzh{font-size:12px;color:var(--muted);margin-bottom:2px}
+.dex{font-size:12px;color:var(--muted);font-style:italic;margin-top:2px;
+     padding-left:8px;border-left:2px solid var(--border)}
+
+/* ── arena ── */
+#arena-inner{flex:1;overflow-y:auto;padding:12px 14px 16px}
+.mcard{background:var(--bg2);border:1px solid var(--border);border-radius:16px;
+       padding:17px;display:flex;align-items:center;gap:14px;cursor:pointer;
+       transition:all .2s;margin-bottom:10px}
+.mcard:hover{border-color:var(--accent);background:var(--bg3)}
+.mico{width:50px;height:50px;border-radius:14px;
+      display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dslot{background:var(--bg3);border:2px dashed var(--border);border-radius:12px;
+       aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.hand-row{display:flex;gap:8px;overflow-x:auto;padding:5px 2px}
+.hand-row::-webkit-scrollbar{display:none}
+.hcard{width:76px;flex-shrink:0;cursor:pointer;transition:transform .2s}
+.hcard:hover{transform:translateY(-6px)}
+.hcard.used{opacity:.22;cursor:not-allowed}
+.hcard.sel{transform:translateY(-10px);outline:3px solid var(--accent);border-radius:14px}
+.rinput{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+        padding:12px 16px;font-size:20px;font-family:'Black Han Sans',sans-serif;
+        letter-spacing:6px;color:#fff;width:100%;text-align:center;text-transform:uppercase}
+.rinput:focus{outline:none;border-color:var(--accent)}
+.rcode{font-family:'Black Han Sans',sans-serif;font-size:34px;letter-spacing:10px;
+       color:var(--accent);text-align:center;padding:10px}
+
+/* ── buttons ── */
+.btn{border:none;border-radius:12px;padding:12px 18px;font-size:14px;
+     font-family:inherit;font-weight:700;cursor:pointer;transition:all .2s;
+     display:flex;align-items:center;justify-content:center;gap:7px}
+.btn:active{transform:scale(.95)}
+.btnp{background:var(--accent);color:#fff}
+.btnp:hover{filter:brightness(1.12)}
+.btns{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── misc ── */
+.dvd{height:1px;background:var(--border);margin:10px 0}
+.tag{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid}
+@keyframes cdrop{from{transform:translateY(-36px) rotate(-4deg);opacity:0}to{transform:none;opacity:1}}
+.cdrop{animation:cdrop .5s cubic-bezier(.22,.68,0,1.2) forwards}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
-@keyframes legendGlow{0%,100%{box-shadow:0 0 0 rgba(251,191,36,0)}50%{box-shadow:0 0 22px rgba(251,191,36,.45)}}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-.anim-fade{animation:fadeIn .3s ease forwards}
-.anim-up{animation:slideUp .4s cubic-bezier(.22,.68,0,1.2) forwards}
-.anim-down{animation:slideDown .35s ease forwards}
-.anim-zoom{animation:zoomIn .35s cubic-bezier(.22,.68,0,1.2) forwards}
-.anim-pop{animation:popBounce .5s cubic-bezier(.22,.68,0,1.2) forwards}
-.anim-shake{animation:shake .35s ease}
-.legend-glow{animation:legendGlow 2.2s ease-in-out infinite}
-/* hangman body parts */
-.hm-head{opacity:0;transition:opacity .3s ease}
-.hm-head.show{opacity:1}
-.hm-part{stroke-dasharray:200;stroke-dashoffset:200;transition:stroke-dashoffset .4s ease}
-.hm-part.show{stroke-dashoffset:0}
-/* keys */
-.key-btn{aspect-ratio:1;min-height:36px;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;border:1px solid;user-select:none;transition:all .12s}
-.key-btn:not(:disabled){background:#1e293b;border-color:#334155;color:#fff}
-.key-btn:not(:disabled):hover{background:#2d3f55}
-.key-btn:not(:disabled):active{transform:scale(.82)}
-.key-btn.wr{background:#1a0a0a;border-color:#7f1d1d;color:#3f1010;cursor:not-allowed}
-.key-btn.ok{background:#0a1a0d;border-color:#14532d;color:#0d3316;cursor:not-allowed}
-/* CEFR */
-.cefr{font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:999px;border:1px solid}
-.cefr-A1{background:#14532d33;color:#4ade80;border-color:#16a34a66}
-.cefr-A2{background:#065f4633;color:#6ee7b7;border-color:#059669}
-.cefr-B1{background:#1e3a8a33;color:#93c5fd;border-color:#2563eb66}
-.cefr-B2{background:#4c1d9533;color:#c4b5fd;border-color:#7c3aed66}
-.cefr-C1{background:#7c120033;color:#fca5a5;border-color:#dc262666}
-.cefr-C2{background:#78350f33;color:#fde68a;border-color:#d9770066}
-.cefr-X{background:#1e293b;color:#64748b;border-color:#334155}
-.no-sb::-webkit-scrollbar{display:none}
-.no-sb{-ms-overflow-style:none;scrollbar-width:none}
-.tab-btn{color:#4b5563;transition:color .2s}
-.tab-btn.active{color:#818cf8}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:150;display:flex;align-items:center;justify-content:center;padding:1rem}
-.overlay.hidden{display:none!important}
+.splash{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;
+        flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin 1s linear infinite}
 </style>
 </head>
 <body>
 
-<!-- Toast -->
-<div id="toasts" class="fixed top-16 left-1/2 -translate-x-1/2 z-[300] flex flex-col gap-2 pointer-events-none w-[92%] max-w-sm"></div>
+<!-- Splash -->
+<div class="splash" id="splash">
+  <div class="ko" style="font-size:44px;background:linear-gradient(135deg,#7c6aff,#ff6ab0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:4px">WORD ARENA</div>
+  <div style="color:var(--muted);font-size:13px">單字卡牌對戰</div>
+  <div style="margin-top:20px;color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px">
+    <svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c6aff" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+    初始化中…
+  </div>
+</div>
 
 <!-- Header -->
-<header class="sticky top-0 z-50 bg-[#0d1424]/95 backdrop-blur border-b border-slate-800 px-5 py-3 flex justify-between items-center shadow-xl">
-  <h1 class="font-display text-2xl tracking-widest" style="background:linear-gradient(135deg,#818cf8,#c084fc,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent">&#9876; WORD ARENA</h1>
-  <div class="flex items-center gap-2 text-sm">
-    <span class="text-slate-500">收集</span>
-    <span id="hdr-count" class="font-bold bg-indigo-600/25 border border-indigo-500/40 px-2.5 py-0.5 rounded-full text-indigo-200">0</span>
-    <span id="hdr-mode" class="text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-600 text-slate-400 bg-slate-800/50">單機</span>
-  </div>
-</header>
-
-<!-- Card Modal -->
-<div id="card-modal" class="overlay hidden">
-  <div class="bg-[#111827] border border-slate-600/50 rounded-3xl w-full max-w-md p-6 shadow-2xl anim-zoom relative max-h-[90vh] overflow-y-auto no-sb">
-    <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full w-9 h-9 flex items-center justify-center transition-all"><i class="fas fa-times"></i></button>
-    <div id="card-modal-body" class="flex flex-col items-center pt-1"></div>
+<div id="hdr">
+  <div class="ko" style="font-size:18px;background:linear-gradient(135deg,#7c6aff,#ff6ab0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px">WORD ARENA</div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)">
+    卡牌
+    <span id="hcount" style="font-weight:900;color:#fff;background:var(--bg3);padding:2px 10px;border-radius:999px;border:1px solid var(--border)">0</span>
   </div>
 </div>
 
 <!-- Main -->
-<main class="max-w-2xl mx-auto px-4 pt-4 w-full">
-  <div id="view-hangman" class="anim-fade">
-    <div id="hm-container" class="flex flex-col items-center w-full max-w-lg mx-auto"></div>
-  </div>
-  <div id="view-library" class="hidden anim-fade">
-    <div class="flex justify-between items-end mb-5">
-      <h2 class="text-xl font-bold flex items-center gap-2"><i class="fas fa-book-open text-indigo-400"></i>卡牌庫</h2>
-      <span class="text-xs text-slate-500">點擊查看詳情</span>
+<div id="main">
+
+  <!-- HANGMAN -->
+  <div class="view on" id="view-hangman">
+    <div id="hm-inner">
+      <div id="hm-status"></div>
+      <div id="gallows"></div>
+      <div id="wdisp"></div>
+      <div id="hint" style="font-size:11px;color:var(--muted);min-height:14px"></div>
+      <div id="kb"></div>
     </div>
-    <div id="lib-container" class="grid grid-cols-2 sm:grid-cols-3 gap-4 pb-6"></div>
+    <div id="roverlay"><div id="rcontent" style="width:100%;max-width:400px"></div></div>
   </div>
-  <div id="view-arena" class="hidden anim-fade">
-    <div id="arena-container" class="w-full"></div>
+
+  <!-- LIBRARY -->
+  <div class="view" id="view-library">
+    <div style="padding:10px 14px 6px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <span style="font-weight:800;font-size:15px">卡牌庫</span>
+      <span style="font-size:11px;color:var(--muted)">點擊卡牌查看字義</span>
+    </div>
+    <div id="libgrid"></div>
   </div>
-</main>
 
-<!-- Bottom Nav -->
-<nav class="fixed bottom-0 w-full bg-[#0d1424]/95 backdrop-blur border-t border-slate-800 flex z-50">
-  <button id="tab-hangman" class="tab-btn active flex-1 flex flex-col items-center py-2" onclick="switchTab('hangman')">
-    <i class="fas fa-gamepad text-2xl mb-0.5"></i><span class="text-[11px] font-medium">猜單字</span>
+  <!-- ARENA -->
+  <div class="view" id="view-arena">
+    <div style="padding:10px 14px 6px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+      <span style="font-weight:800;font-size:15px">競技場</span>
+      <button class="btn btns" style="font-size:11px;padding:5px 10px" onclick="aBack()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        返回
+      </button>
+    </div>
+    <div id="arena-inner" class="scr"></div>
+  </div>
+</div>
+
+<!-- Nav -->
+<div id="nav">
+  <button class="nb on" id="nb-hangman" onclick="goTab('hangman')">
+    <!-- skull SVG -->
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7.03 2 3 6.03 3 11c0 2.97 1.4 5.62 3.59 7.33V20a1 1 0 001 1h8.82a1 1 0 001-1v-1.67C19.6 16.62 21 13.97 21 11c0-4.97-4.03-9-9-9zm-2.5 14.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm5 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg>
+    猜單字
   </button>
-  <button id="tab-library" class="tab-btn flex-1 flex flex-col items-center py-2 relative" onclick="switchTab('library')">
-    <i class="fas fa-book-open text-2xl mb-0.5"></i><span class="text-[11px] font-medium">卡牌庫</span>
-    <span id="lib-badge" class="hidden absolute top-1 right-5 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 rounded-full flex items-center justify-center px-1"></span>
+  <button class="nb lk" id="nb-library" onclick="goTab('library')">
+    <!-- layers SVG -->
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    卡牌庫
+    <span class="nbadge" id="nbadge">0</span>
   </button>
-  <button id="tab-arena" class="tab-btn flex-1 flex flex-col items-center py-2" onclick="switchTab('arena')" disabled>
-    <i id="arena-nav-icon" class="fas fa-lock text-2xl mb-0.5"></i>
-    <span id="arena-nav-label" class="text-[11px] font-medium">競技場(需4張)</span>
+  <button class="nb lk" id="nb-arena" onclick="goTab('arena')">
+    <!-- swords SVG -->
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6 2 2-6 6z"/><path d="M3 21l4-4"/><path d="M5 11L19 5l-6 14-3-5z" style="display:none"/></svg>
+    競技場
   </button>
-</nav>
+</div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+<!-- Card Modal -->
+<div id="mbg" onclick="cModal()">
+  <div id="mbox" onclick="event.stopPropagation()"><div id="mcontent"></div></div>
+</div>
 
-// ── State ────────────────────────────────────────────────────
-let fbDb, fbAppId, fbUser, fbUnsubCards, fbUnsubMatches;
+<!-- Toast container -->
+<div id="twrap"></div>
 
-const G = {
-  mode: 'offline',
-  cards: [],
-  activeTab: 'hangman',
-  hm: { status:'loading', word:'', guessed:[], mistakes:0, maxMistakes:6, newCard:null, details:null },
-  arena: {
-    view: 'deck_select',
-    deck: [],
-    rooms: [],
-    matchId: null, matchData: null,
-    // AI battle state
-    aiRound:1, aiMyWins:0, aiOpWins:0,
-    myAiState: null, aiState: null,
-    roundResult: null
+<script>
+'use strict';
+
+// ════════════════════════════════
+// SVG ICON HELPERS (inline, no CDN)
+// ════════════════════════════════
+const ICO = {
+  spin: `<svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`,
+  check: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  info:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  warn:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  book:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>`,
+  globe: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`,
+  chart: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  plus:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  x:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  back:  `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>`,
+  copy:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
+  wifi:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 16 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/></svg>`,
+  robot: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M12 11V7"/><circle cx="12" cy="5" r="2"/><line x1="8" y1="15" x2="8.01" y2="15" stroke-width="3"/><line x1="16" y1="15" x2="16.01" y2="15" stroke-width="3"/><path d="M7 11V9a5 5 0 0110 0v2"/></svg>`,
+  chevR:`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>`,
+  door: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  enter:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>`,
+  refresh:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>`,
+  heart: `<svg width="11" height="11" viewBox="0 0 24 24" fill="#ff6b6b"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z"/></svg>`,
+  bolt:  `<svg width="10" height="10" viewBox="0 0 24 24" fill="#74b9ff"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  star:  (filled, col) => `<svg width="10" height="10" viewBox="0 0 24 24" fill="${filled?col:'#2a2a45'}" stroke="${filled?col:'#2a2a45'}" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+};
+
+// ════════════════════════════════
+// STATE
+// ════════════════════════════════
+const S = {
+  cards:[], unlockedLib:false, tab:'hangman',
+  hm:{ status:'idle', word:'', guessed:new Set(), mistakes:0, maxMistakes:6, errors:0, details:null, newCard:null },
+  ar:{
+    phase:'mode', deck:[], _mode:'ai',
+    ai:{hand:[],used:new Set()}, pl:{hand:[],used:new Set()},
+    round:1, plW:0, aiW:0, rr:null,
+    peer:null, conn:null, isHost:false, roomCode:'',
+    np:{hand:[],used:new Set(),wins:0,sel:null},
+    no:{hand:[],used:new Set(),wins:0,sel:null,ready:false},
+    netRound:1, netRR:null,
   }
 };
 
-// ── Toast ────────────────────────────────────────────────────
-window.toast = (msg, err=false) => {
-  const el = document.createElement('div');
-  el.className = `px-5 py-3 rounded-full shadow-2xl border anim-down flex items-center gap-2 text-sm font-bold w-full justify-center pointer-events-auto ${err?'bg-rose-950 border-rose-700 text-rose-200':'bg-slate-800 border-slate-600/50 text-white'}`;
-  el.innerHTML = `<i class="fas ${err?'fa-triangle-exclamation text-rose-400':'fa-circle-check text-indigo-400'}"></i>${msg}`;
-  document.getElementById('toasts').appendChild(el);
-  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3200);
-};
-
-// ── Storage ──────────────────────────────────────────────────
-function saveLocal() { try{ localStorage.setItem('WA_v2', JSON.stringify(G.cards)); }catch(e){} }
-function loadLocal() {
-  try {
-    const r = localStorage.getItem('WA_v2');
-    if (r) { G.cards = JSON.parse(r); return; }
-    const old = localStorage.getItem('wordArenaCards');
-    if (old) G.cards = JSON.parse(old).map((c,i)=>({...c, id:c.id||'old'+i}));
-  } catch(e) { G.cards = []; }
+// ════════════════════════════════
+// PERSIST
+// ════════════════════════════════
+function save(){
+  try{ localStorage.setItem('wa_v4', JSON.stringify({cards:S.cards,ul:S.unlockedLib})); }catch(e){}
+}
+function load(){
+  try{
+    const d = JSON.parse(localStorage.getItem('wa_v4')||'null');
+    if(d){ S.cards=d.cards||[]; S.unlockedLib=!!d.ul; }
+    if(S.cards.length) S.unlockedLib=true;
+  }catch(e){ S.cards=[]; }
 }
 
-// ── Firebase ─────────────────────────────────────────────────
-async function initFirebase() {
-  try {
-    let cfg = {};
-    if (typeof __firebase_config !== 'undefined') cfg = typeof __firebase_config==='string'?JSON.parse(__firebase_config):__firebase_config;
-    if (!cfg || !Object.keys(cfg).length) throw new Error('no config');
-    fbAppId = typeof __app_id !== 'undefined' ? __app_id : 'word-arena-v2';
-    const app = initializeApp(cfg);
-    const auth = getAuth(app);
-    fbDb = getFirestore(app);
-    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-    else await signInAnonymously(auth);
-    onAuthStateChanged(auth, user => {
-      if (user) {
-        fbUser = user; G.mode = 'online';
-        document.getElementById('hdr-mode').textContent = '連線';
-        document.getElementById('hdr-mode').className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-600/50 text-emerald-300 bg-emerald-900/20';
-        const ref = collection(fbDb,'artifacts',fbAppId,'users',user.uid,'cards');
-        fbUnsubCards = onSnapshot(ref, snap => {
-          G.cards = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.createdAt-a.createdAt);
-          updateUI();
-          if (G.activeTab==='library') renderLibrary();
-          if (G.activeTab==='arena') renderArena();
-        });
+// ════════════════════════════════
+// TOAST
+// ════════════════════════════════
+function toast(msg, type='info'){
+  const el=document.createElement('div');
+  const ico = type==='error' ? ICO.warn : type==='ok' ? ICO.check : ICO.info;
+  const col = type==='error' ? '#ff4d6d' : type==='ok' ? '#00d68f' : '#7c6aff';
+  el.className='toast';
+  el.innerHTML=`<span style="color:${col};flex-shrink:0">${ico}</span>${msg}`;
+  document.getElementById('twrap').appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 2800);
+}
+
+// ════════════════════════════════
+// CEFR
+// ════════════════════════════════
+const CEFR_LIST=['A1','A2','B1','B2','C1','C2'];
+function c2s(c){ return Math.max(1, CEFR_LIST.indexOf(c)+1) || 1; }
+function cCol(c){ return {A1:'#94a3b8',A2:'#4ade80',B1:'#60a5fa',B2:'#a78bfa',C1:'#fb923c',C2:'#facc15'}[c]||'#6b6b9a'; }
+function cBg(c){  return {A1:'#94a3b810',A2:'#4ade8015',B1:'#60a5fa15',B2:'#a78bfa18',C1:'#fb923c18',C2:'#facc1520'}[c]||'#6b6b9a10'; }
+function estCEFR(w){
+  const l=w.length;
+  return l<=3?'A1':l===4?'A1':l===5?'A2':l===6?'B1':l===7?'B2':l===8?'C1':'C2';
+}
+
+// ════════════════════════════════
+// WORD SOURCE (wide range)
+// ════════════════════════════════
+const TOPICS=['animal','technology','science','space','ocean','history','medicine','music','food','sports','geography','art','nature','architecture','philosophy','psychology','law','biology','chemistry','weather'];
+
+async function getRandWord(){
+  // 60% topic-based (datamuse) — varied, domain-rich
+  if(Math.random() < 0.6){
+    try{
+      const t = TOPICS[~~(Math.random()*TOPICS.length)];
+      const mode = Math.random()<.5 ? 'ml' : 'rel_trg';
+      const r = await fetch(`https://api.datamuse.com/words?${mode}=${t}&max=120`, {signal:AbortSignal.timeout(5000)});
+      const d = await r.json();
+      const pool = d.filter(x => /^[a-z]+$/.test(x.word) && x.word.length>=4 && x.word.length<=11);
+      if(pool.length) return pool[~~(Math.random()*Math.min(pool.length,80))].word;
+    }catch(e){}
+  }
+  // 40% random-word-api
+  try{
+    const len = ~~(Math.random()*7)+4;
+    const r = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`, {signal:AbortSignal.timeout(5000)});
+    const d = await r.json();
+    if(d?.[0]) return d[0];
+  }catch(e){}
+  // local fallback pool
+  const fb=['serendipity','metamorphosis','ephemeral','labyrinth','zenith','catalyst','enigma','quantum','palimpsest','soliloquy','melancholy','wanderlust','gossamer','sycophant','ineffable','sonder','hiraeth','lacuna','petrichor','susurrus'];
+  return fb[~~(Math.random()*fb.length)];
+}
+
+// ════════════════════════════════
+// DICT LOOKUP — PARALLEL, ROBUST
+// ════════════════════════════════
+
+// Safe fetch with timeout, returns null on failure
+async function sfetch(url, ms=6000){
+  try{
+    const r = await fetch(url, {signal:AbortSignal.timeout(ms)});
+    if(!r.ok) return null;
+    return r;
+  }catch(e){ return null; }
+}
+
+async function getDictData(word){
+  // Free Dictionary API
+  const r = await sfetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+  if(!r) return null;
+  try{
+    const d = await r.json();
+    if(!d?.[0]) return null;
+    return {
+      phonetic: d[0].phonetic || d[0].phonetics?.find(p=>p.text)?.text || '',
+      meanings: d[0].meanings.map(m=>({
+        partOfSpeech: m.partOfSpeech,
+        definitions: m.definitions.slice(0,3).map(dd=>({def:dd.definition||'',example:dd.example||'',zh:''}))
+      }))
+    };
+  }catch(e){ return null; }
+}
+
+async function getCEFR(word){
+  // Cambridge Learner's Dictionary HTML scrape
+  const r = await sfetch(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(word)}`, 7000);
+  if(!r) return null;
+  try{
+    const html = await r.text();
+    const m = html.match(/class="epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
+           || html.match(/>\s*([ABC][12])\s*<\/span>/i)
+           || html.match(/data-level="([ABC][12])"/i);
+    return m ? m[1].toUpperCase() : null;
+  }catch(e){ return null; }
+}
+
+// ── 內建常見字翻譯對照（保底，MyMemory 失敗時用）──
+const ZH_DICT = {
+  metamorphosis:'變態／變形',cat:'貓',dog:'狗',fish:'魚',bird:'鳥',tree:'樹',house:'房子',
+  water:'水',fire:'火',earth:'土',wind:'風',light:'光',dark:'黑暗',sky:'天空',sea:'海',
+  mountain:'山',river:'河',forest:'森林',flower:'花',stone:'石頭',sun:'太陽',moon:'月亮',
+  star:'星星',cloud:'雲',rain:'雨',snow:'雪',time:'時間',life:'生命',death:'死亡',
+  love:'愛',hate:'恨',hope:'希望',fear:'恐懼',dream:'夢',truth:'真相',power:'力量',
+  mind:'心智',soul:'靈魂',heart:'心',eye:'眼睛',hand:'手',voice:'聲音',word:'單字',
+  book:'書',school:'學校',city:'城市',country:'國家',world:'世界',science:'科學',
+  music:'音樂',art:'藝術',history:'歷史',nature:'自然',animal:'動物',plant:'植物',
+  color:'顏色',number:'數字',letter:'字母',question:'問題',answer:'答案',
+  change:'改變',move:'移動',grow:'成長',fall:'墜落',rise:'上升',stand:'站立',
+  walk:'走路',run:'跑步',fly:'飛翔',swim:'游泳',eat:'吃',drink:'喝',sleep:'睡眠',
+  think:'思考',speak:'說話',listen:'聆聽',watch:'觀看',feel:'感受',know:'知道',
+  beautiful:'美麗的',strong:'強壯的',fast:'快速的',slow:'緩慢的',big:'大的',small:'小的',
+  old:'老的',new:'新的',good:'好的',bad:'壞的',hot:'熱的',cold:'冷的',
+  serendipity:'意外驚喜',ephemeral:'短暫的',labyrinth:'迷宮',zenith:'頂點',
+  catalyst:'催化劑',enigma:'謎',quantum:'量子',soliloquy:'獨白',melancholy:'憂鬱',
+  wanderlust:'旅行癮',gossamer:'蜘蛛絲',lacuna:'空缺',petrichor:'雨後泥土香',
+  eloquent:'口才好的',ambiguous:'模稜兩可的',profound:'深刻的',resilient:'有韌性的',
+  benevolent:'慈善的',malevolent:'惡意的',omniscient:'全知的',ephemeral:'短暫的',
+  phenomenon:'現象',democracy:'民主',philosophy:'哲學',technology:'科技',
+  evolution:'演化',revolution:'革命',civilization:'文明',imagination:'想像力',
+  psychology:'心理學',anthropology:'人類學',archaeology:'考古學',
+  architecture:'建築',atmosphere:'氣氛／大氣',catastrophe:'災難',
+  chromosome:'染色體',photosynthesis:'光合作用',electromagnetic:'電磁的',
+  metabolism:'新陳代謝',hibernation:'冬眠',camouflage:'偽裝',
+  predator:'掠食者',ecosystem:'生態系',telescope:'望遠鏡',microscope:'顯微鏡',
+};
+
+// 清理翻譯結果 — 去除雜訊，回傳乾淨中文
+function cleanTr(t, orig){
+  if(!t) return '';
+  t = t.trim();
+  // 拒絕：只回傳原字、MYMEMORY錯誤、純英文、過長
+  if(t.toUpperCase().includes('MYMEMORY')) return '';
+  if(t.toLowerCase() === orig.toLowerCase()) return '';
+  if(/^[a-zA-Z\s]+$/.test(t)) return ''; // 全英文沒翻到
+  return t.split(/[,，;；(（\n]/)[0].trim().slice(0, 18);
+}
+
+async function getTranslation(text){
+  const orig = text.toLowerCase().trim();
+
+  // 1. 內建詞庫（最快最可靠）
+  if(ZH_DICT[orig]) return ZH_DICT[orig];
+
+  // 2. MyMemory
+  try{
+    const r = await sfetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0,200))}&langpair=en|zh-TW`, 6000);
+    if(r){
+      const d = await r.json();
+      const t = cleanTr(d?.responseData?.translatedText, orig);
+      if(t) return t;
+      // 也試試 matches[0]
+      const m0 = d?.matches?.[0]?.translation;
+      if(m0){ const t2=cleanTr(m0,orig); if(t2) return t2; }
+    }
+  }catch(e){}
+
+  // 3. Google Translate 非官方端點（通常可用）
+  try{
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(text.slice(0,200))}`;
+    const r = await sfetch(url, 6000);
+    if(r){
+      const d = await r.json();
+      const t = cleanTr(d?.[0]?.[0]?.[0], orig);
+      if(t) return t;
+    }
+  }catch(e){}
+
+  // 4. Wikipedia 中文標題（對專有名詞很好）
+  try{
+    const r = await sfetch(`https://zh.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(orig)}&redirects=1&format=json&origin=*`, 4000);
+    if(r){
+      const d = await r.json();
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.title && pages[id].title.toLowerCase()!==orig){
+        return pages[id].title.slice(0,16);
       }
-    });
-  } catch(e) {
-    // pure offline
-  }
-}
-
-// ── iOS Safari 相容 fetch timeout ──────────────────────────────
-function fetchT(url, opts, ms) {
-  ms = ms || 6000;
-  var ctrl = new AbortController();
-  var tid = setTimeout(function(){ ctrl.abort(); }, ms);
-  var o = Object.assign({}, opts || {}, { signal: ctrl.signal });
-  return fetch(url, o).finally(function(){ clearTimeout(tid); });
-}
-
-// ── CEFR ─────────────────────────────────────────────────────
-async function fetchCEFR(word) {
-  try {
-    const res = await fetchT(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(word)}`, {}, 6000);
-    if (res.ok) {
-      const html = await res.text();
-      const m = html.match(/class="[^"]*epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
-               || html.match(/data-level="([ABC][12])"/i)
-               || html.match(/>([ABC][12])<\/span>/i);
-      if (m) return m[1].toUpperCase();
     }
-  } catch(e) {}
-  const l = word.length;
-  return l<=4?'A1':l===5?'A2':l===6?'B1':l===7?'B2':l===8?'C1':'C2';
+  }catch(e){}
+
+  return ''; // 真的查不到
 }
 
-// ── Translation ───────────────────────────────────────────────
-async function fetchTranslation(word) {
-  try {
-    const r = await fetchT(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(word)}&langpair=en|zh-TW`, {}, 6000);
-    if (r.ok) {
+async function getWiki(word){
+  // Try Chinese Wikipedia first
+  try{
+    const r = await sfetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`, 5000);
+    if(r){
       const d = await r.json();
-      const t = d?.responseData?.translatedText;
-      if (t && !t.includes('MYMEMORY') && t.toLowerCase()!==word.toLowerCase() && t.length<30 && t.length>0) return t;
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 20){
+        return { title: pages[id].title, extract: pages[id].extract, lang:'zh' };
+      }
     }
-  } catch(e) {}
-  for (const ep of ['https://libretranslate.de/translate','https://translate.argosopentech.com/translate']) {
-    try {
-      const r = await fetchT(ep, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({q:word,source:'en',target:'zh',format:'text'}) });
-      if (r.ok) { const d = await r.json(); if (d?.translatedText && d.translatedText.toLowerCase()!==word.toLowerCase()) return d.translatedText; }
-    } catch(e) {}
-  }
-  try {
-    const r = await fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`, {}, 4000);
-    if (r.ok) {
+  }catch(e){}
+
+  // Fallback: English Wikipedia
+  try{
+    const r = await sfetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=4&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`, 5000);
+    if(r){
       const d = await r.json();
-      const pos = d?.[0]?.meanings?.[0]?.partOfSpeech;
-      const posMap = {noun:'名詞',verb:'動詞',adjective:'形容詞',adverb:'副詞',pronoun:'代名詞',preposition:'介係詞',conjunction:'連接詞'};
-      if (pos) return `(${posMap[pos]||pos})`;
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 20){
+        return { title: pages[id].title, extract: pages[id].extract, lang:'en' };
+      }
     }
-  } catch(e) {}
-  return word;
+  }catch(e){}
+
+  return null;
 }
 
-// ── Word Details ──────────────────────────────────────────────
-window.fetchWordDetails = async function(word) {
-  const wl = word.toLowerCase();
-  let translation = '', explanation = '', isRare = false, phonetic = '', enDef = '';
+// Master word-data fetch — ALL APIs run in parallel
+async function fetchWordData(word){
+  const w = word.toLowerCase();
+  const res = { word:w, phonetic:'', cefr:null, meanings:[], translation:'', explanation:'', isRare:false };
 
-  const [transResult, dictResult] = await Promise.allSettled([
-    fetchTranslation(wl),
-    fetchT(`https://api.dictionaryapi.dev/api/v2/entries/en/${wl}`, {}, 5000)
+  // Run dict, CEFR, word-translation all at once
+  const [dictResult, cefrResult, trResult] = await Promise.allSettled([
+    getDictData(w),
+    getCEFR(w),
+    getTranslation(w),
   ]);
-  translation = transResult.status==='fulfilled' ? transResult.value : wl;
 
-  if (dictResult.status==='fulfilled' && dictResult.value.ok) {
-    try {
-      const d = await dictResult.value.json();
-      phonetic = d?.[0]?.phonetic || d?.[0]?.phonetics?.[0]?.text || '';
-      enDef = d?.[0]?.meanings?.[0]?.definitions?.[0]?.definition || '';
-    } catch(e) {}
+  // Apply dict
+  if(dictResult.status==='fulfilled' && dictResult.value){
+    res.phonetic  = dictResult.value.phonetic;
+    res.meanings  = dictResult.value.meanings;
   }
 
-  const cefr = await fetchCEFR(wl);
+  // Apply CEFR
+  if(cefrResult.status==='fulfilled' && cefrResult.value){
+    res.cefr = cefrResult.value;
+  }
 
-  try {
-    const wr = await fetchT(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=2&explaintext=1&titles=${encodeURIComponent(wl)}&format=json&origin=*`, {}, 6000);
-    const wd = await wr.json();
-    const pages = wd?.query?.pages; const pid = pages ? Object.keys(pages)[0] : '-1';
-    if (pid!=='-1' && pages[pid]?.extract) {
-      explanation = `【維基百科】${pages[pid].extract}`; isRare = true;
-      if (translation===wl || !translation) translation = pages[pid].title || wl;
+  // Apply translation (only if it's genuinely Chinese)
+  if(trResult.status==='fulfilled' && trResult.value){
+    res.translation = trResult.value;
+  }
+
+  // Wikipedia: always try for explanation — critical for words not in Free Dictionary
+  // Run in parallel with the already-collected data
+  const wikiResult = await getWiki(w);
+
+  if(!res.meanings.length){
+    res.isRare = true;
+    if(wikiResult){
+      res.explanation = wikiResult.extract;
+      const wikiTitle = wikiResult.title;
+      if(wikiTitle && wikiTitle.toLowerCase() !== w && /[\u4e00-\u9fff]/.test(wikiTitle)){
+        if(!res.translation) res.translation = wikiTitle.slice(0,16);
+      }
     }
-  } catch(e) {}
+  } else {
+    // Even when we have dict data, add wiki as supplemental explanation
+    if(wikiResult && !res.explanation){
+      // Only use if it looks informative (not just a stub)
+      if(wikiResult.extract && wikiResult.extract.length > 50){
+        res.explanation = (wikiResult.lang==='zh' ? '' : '【Wikipedia】') + wikiResult.extract;
+      }
+    }
+  }
 
-  const parts = [];
-  if (phonetic) parts.push(`發音：${phonetic}`);
-  if (enDef) parts.push(`【英英字典】${enDef}`);
-  if (explanation) parts.push(explanation);
-  if (!parts.length) parts.push(`「${word}」的中文翻譯為「${translation}」。`);
-  if (cefr && !['???'].includes(cefr)) parts.push(`📖 劍橋學習者字典 CEFR 分級：${cefr}`);
-  explanation = parts.join('\n\n');
+  // Still no translation? Try translating the first English definition
+  if(!res.translation && res.meanings.length){
+    const firstDef = res.meanings[0]?.definitions[0]?.def || '';
+    if(firstDef) res.translation = await getTranslation(firstDef);
+  }
 
-  return { translation, explanation, isRare, cefr: cefr||'???' };
-};
+  // Still nothing? Try translating the word itself one more time via Google
+  if(!res.translation){
+    try{
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(w)}`;
+      const r = await sfetch(url, 5000);
+      if(r){ const d=await r.json(); const t=cleanTr(d?.[0]?.[0]?.[0],w); if(t) res.translation=t; }
+    }catch(e){}
+  }
 
-// ── Card HTML ─────────────────────────────────────────────────
-const THEMES = {
-  1:{b:'border-slate-600', g:'from-slate-900', s:'text-slate-400'},
-  2:{b:'border-emerald-700', g:'from-emerald-950', s:'text-emerald-400'},
-  3:{b:'border-blue-600', g:'from-blue-950', s:'text-blue-400'},
-  4:{b:'border-violet-600', g:'from-violet-950', s:'text-violet-400'},
-  5:{b:'border-yellow-500', g:'from-amber-950', s:'text-yellow-400'},
-};
-window.cardHTML = function(card, hidden=false) {
-  if (hidden) return `<div class="bg-[#111827] border border-slate-700 rounded-xl w-full aspect-[3/4] flex items-center justify-center"><i class="fas fa-lock text-slate-600 text-3xl"></i></div>`;
-  const t = THEMES[card.stars]||THEMES[1];
-  const stars = Array.from({length:5},(_,i)=>`<i class="fas fa-star text-[10px] ${i<card.stars?t.s:'text-slate-700'}"></i>`).join('');
-  const cc = ['A1','A2','B1','B2','C1','C2'].includes(card.cefr)?`cefr-${card.cefr}`:'cefr-X';
-  const lc = card.stars===5?'legend-glow':'';
-  const fs = card.word.length>9?'text-lg':card.word.length>6?'text-2xl':'text-3xl';
-  return `<div class="relative bg-gradient-to-b ${t.g} to-[#080d1a] border-2 ${t.b} rounded-xl p-3 w-full aspect-[3/4] flex flex-col items-center shadow-xl overflow-hidden ${lc}">
-    <div class="flex gap-0.5 mb-2">${stars}</div>
-    <div class="flex-1 flex items-center justify-center w-full px-1">
-      <h3 class="font-display ${fs} tracking-widest text-white text-center break-words w-full uppercase drop-shadow">${card.word}</h3>
+  // Translate first definition to Chinese for the card modal detail view
+  if(res.meanings[0]?.definitions[0] && !res.meanings[0].definitions[0].zh){
+    const defTr = await getTranslation(res.meanings[0].definitions[0].def.slice(0,180));
+    if(defTr) res.meanings[0].definitions[0].zh = defTr;
+  }
+
+  // Also translate 2nd and 3rd meanings in background (non-blocking)
+  res.meanings.slice(1,3).forEach(async m => {
+    if(m.definitions[0] && !m.definitions[0].zh){
+      const t = await getTranslation(m.definitions[0].def.slice(0,160));
+      if(t) m.definitions[0].zh = t;
+    }
+  });
+
+  // Build explanation from meanings if still empty
+  if(!res.explanation && res.meanings.length){
+    res.explanation = res.meanings.map(m=>`【${m.partOfSpeech}】${m.definitions[0]?.def||''}`).join('\n');
+  }
+
+  // Last-resort fallback for translation — use POS label, never show original word
+  if(!res.translation){
+    const posMap = {noun:'名詞',verb:'動詞',adjective:'形容詞',adverb:'副詞',pronoun:'代名詞',conjunction:'連接詞',preposition:'介系詞',exclamation:'感嘆詞'};
+    const pos = res.meanings[0]?.partOfSpeech;
+    res.translation = pos ? `[${posMap[pos]||pos}]` : `[英文單字]`;
+  }
+  if(!res.cefr) res.cefr = res.isRare ? 'C2' : estCEFR(w);
+
+  return res;
+}
+
+// ════════════════════════════════
+// BUILD CARD
+// ════════════════════════════════
+function buildCard(wd, mistakes, maxM){
+  const stars   = c2s(wd.cefr);
+  const acc     = Math.max(0, 1 - mistakes/maxM);
+  const defC    = wd.meanings.reduce((s,m)=>s+m.definitions.length,0) || 1;
+  const posC    = wd.meanings.length || 1;
+  const baseHP  = 80 + stars*28 + defC*14 + posC*10;
+  const baseATK = 45 + stars*22 + defC*9  + posC*6;
+  const bonus   = Math.round(acc * 70);
+  return {
+    id:`${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+    word:wd.word.toUpperCase(), wordLower:wd.word,
+    phonetic:wd.phonetic, cefr:wd.cefr, stars,
+    translation:wd.translation, explanation:wd.explanation,
+    meanings:wd.meanings, isRare:wd.isRare,
+    hp:  baseHP  + bonus + ~~(Math.random()*20),
+    atk: baseATK + bonus + ~~(Math.random()*15),
+    isNew:true, createdAt:Date.now()
+  };
+}
+
+// ════════════════════════════════
+// CARD HTML
+// ════════════════════════════════
+function cardH(card, mini){
+  const s   = card.stars, cc = cCol(card.cefr);
+  const wl  = card.word.length;
+  const ws  = wl>9?'12px':wl>7?'14px':wl>5?'17px':'20px';
+  const sz  = mini ? 7 : 9;
+  const starsH = Array.from({length:6}, (_,i)=>ICO.star(i<s,cc)).join('');
+  const hpH  = `${ICO.heart} ${card.hp}`;
+  const atkH = `${ICO.bolt} ${card.atk}`;
+  return `<div class="ci s${s}" style="${mini?'border-radius:10px':''}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+      <div style="display:flex;gap:2px">${starsH}</div>
+      <div class="cchip tag" style="color:${cc};border-color:${cc}35;background:${cBg(card.cefr)}">${card.cefr}</div>
     </div>
-    <p class="text-xs text-slate-300 text-center w-full line-clamp-1 mb-1 px-1">${card.translation}</p>
-    <span class="cefr ${cc} mb-2">${card.cefr||'?'}</span>
-    <div class="bg-black/50 w-full rounded-lg p-2 flex justify-between text-xs font-bold border border-white/5">
-      <span class="text-rose-400 flex items-center gap-1"><i class="fas fa-heart text-[10px]"></i>${card.hp}</span>
-      <span class="text-indigo-300 flex items-center gap-1"><i class="fas fa-khanda text-[10px]"></i>${card.atk}</span>
+    <div class="cword" style="font-size:${ws}">${card.word}</div>
+    <div class="ctr">${card.translation||card.wordLower}</div>
+    <div class="cstats">
+      <span class="shp" style="display:flex;align-items:center;gap:2px">${hpH}</span>
+      <span class="satk" style="display:flex;align-items:center;gap:2px">${atkH}</span>
     </div>
   </div>`;
-};
+}
 
-// ── Hangman SVG (正確人體比例) ────────────────────────────────
-function hangmanSVG(mistakes) {
-  const show = n => mistakes>n ? 'show' : '';
-  // 死亡 X 眼
-  const deadEyes = mistakes>=6 ? `
-    <line x1="122" y1="56" x2="128" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="128" y1="56" x2="122" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="133" y1="56" x2="139" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>
-    <line x1="139" y1="56" x2="133" y2="62" stroke="#f87171" stroke-width="2.5" stroke-linecap="round"/>` : '';
-  return `<svg viewBox="0 0 200 230" width="190" height="190" xmlns="http://www.w3.org/2000/svg">
-    <!-- 底座 -->
-    <line x1="20" y1="215" x2="180" y2="215" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
-    <!-- 直柱 -->
-    <line x1="65" y1="215" x2="65" y2="18" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
-    <!-- 橫樑 -->
-    <line x1="65" y1="18" x2="135" y2="18" stroke="#475569" stroke-width="5" stroke-linecap="round"/>
-    <!-- 懸繩 -->
-    <line x1="135" y1="18" x2="135" y2="40" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
-    <!-- 斜撐 -->
-    <line x1="65" y1="52" x2="100" y2="18" stroke="#374151" stroke-width="2.5" stroke-linecap="round"/>
-    <!-- 頭 (mistakes>=1) -->
-    <circle class="hm-head ${show(0)}" cx="135" cy="57" r="17" stroke="#f87171" stroke-width="3.5" fill="none"/>
-    ${deadEyes}
-    <!-- 身體 (mistakes>=2) -->
-    <line class="hm-part ${show(1)}" x1="135" y1="74" x2="135" y2="130" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
-    <!-- 左手臂 (mistakes>=3) -->
-    <line class="hm-part ${show(2)}" x1="135" y1="88" x2="112" y2="110" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
-    <!-- 右手臂 (mistakes>=4) -->
-    <line class="hm-part ${show(3)}" x1="135" y1="88" x2="158" y2="110" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
-    <!-- 左腿 (mistakes>=5) -->
-    <line class="hm-part ${show(4)}" x1="135" y1="130" x2="115" y2="165" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
-    <!-- 右腿 (mistakes>=6) -->
-    <line class="hm-part ${show(5)}" x1="135" y1="130" x2="155" y2="165" stroke="#94a3b8" stroke-width="3.5" stroke-linecap="round"/>
+// ════════════════════════════════
+// GALLOWS SVG
+// ════════════════════════════════
+function galSVG(n){
+  const parts = [
+    `<circle cx="100" cy="42" r="12" stroke="#ff6ab0" stroke-width="3" fill="none"/>`,
+    `<line x1="100" y1="54" x2="100" y2="98" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="66" x2="78"  y2="84" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="66" x2="122" y2="84" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="98" x2="80"  y2="122" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+    `<line x1="100" y1="98" x2="120" y2="122" stroke="#e8e8f8" stroke-width="3" stroke-linecap="round"/>`,
+  ];
+  return `<svg viewBox="0 0 160 142" width="150" height="142" xmlns="http://www.w3.org/2000/svg">
+    <line x1="20"  y1="133" x2="140" y2="133" stroke="#2a2a45" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50"  y1="133" x2="50"  y2="8"   stroke="#2a2a45" stroke-width="4" stroke-linecap="round"/>
+    <line x1="50"  y1="8"   x2="100" y2="8"   stroke="#2a2a45" stroke-width="4" stroke-linecap="round"/>
+    <line x1="100" y1="8"   x2="100" y2="30"  stroke="#6b6b9a" stroke-width="3" stroke-linecap="round"/>
+    ${parts.slice(0,n).join('')}
   </svg>`;
 }
 
-// ── Hangman Game ──────────────────────────────────────────────
-window.initHangman = async function() {
-  G.hm = { status:'loading', word:'', guessed:[], mistakes:0, maxMistakes:6, newCard:null, details:null };
-  renderHangman();
-  try {
-    let word = '';
-    if (Math.random() > 0.4) {
-      const topics = ['animals','technology','sports','science','astronomy','nature','food','music','geography'];
-      const t = topics[Math.floor(Math.random()*topics.length)];
-      const r = await fetchT(`https://api.datamuse.com/words?ml=${t}&max=60`, {}, 5000);
-      const d = await r.json();
-      const v = d.filter(x => x.word.length>=4 && x.word.length<=9 && /^[a-z]+$/i.test(x.word));
-      word = v[Math.floor(Math.random()*v.length)].word.toUpperCase();
-    } else {
-      const len = Math.floor(Math.random()*5)+4;
-      const r = await fetchT(`https://random-word-api.herokuapp.com/word?length=${len}`, {}, 5000);
-      const d = await r.json();
-      word = d[0].toUpperCase();
-    }
-    G.hm.word = word; G.hm.status = 'playing';
-  } catch(e) {
-    G.hm.word = 'CAMBRIDGE'; G.hm.status = 'playing';
-  }
-  renderHangman();
-};
+// ════════════════════════════════
+// HANGMAN RENDER
+// ════════════════════════════════
+function renderHM(){
+  const hm=S.hm;
+  document.getElementById('gallows').innerHTML = galSVG(hm.mistakes);
 
-window.guess = function(letter) {
-  const hm = G.hm;
-  if (hm.status!=='playing' || hm.guessed.includes(letter)) return;
-  hm.guessed.push(letter);
-  if (!hm.word.includes(letter)) {
-    hm.mistakes++;
-    const wd = document.getElementById('word-disp');
-    if (wd) { wd.classList.add('anim-shake'); setTimeout(()=>wd.classList.remove('anim-shake'),400); }
-    if (hm.mistakes >= hm.maxMistakes) { hangmanOver('lost'); return; }
+  if(hm.status==='loading'||hm.status==='idle'){
+    document.getElementById('wdisp').innerHTML=`<div style="color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px;padding:20px 0">${ICO.spin} 尋找單字…</div>`;
+    document.getElementById('kb').innerHTML='';
+    document.getElementById('hm-status').textContent=''; return;
+  }
+  if(hm.status==='saving'){
+    document.getElementById('wdisp').innerHTML=`<div style="color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px;padding:16px 0"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff6ab0" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> 查詢字典中…</div>`;
+    document.getElementById('kb').innerHTML='';
+    document.getElementById('hm-status').innerHTML=`<span style="color:var(--accent2)">● 獲取百科資訊，請稍候</span>`; return;
+  }
+
+  const left=hm.maxMistakes-hm.mistakes, pct=left/hm.maxMistakes;
+  const sc=pct>.5?'#00d68f':pct>.25?'#fbbf24':'#ff4d6d';
+  document.getElementById('hm-status').innerHTML=`<span style="color:${sc}">●</span> 剩餘機會：${left} / ${hm.maxMistakes}`;
+
+  document.getElementById('wdisp').innerHTML = hm.word.split('').map(c=>{
+    const sh=hm.guessed.has(c);
+    return `<div class="lslot ${sh?'rev':''}">${sh?c:''}</div>`;
+  }).join('');
+
+  document.getElementById('kb').innerHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c=>{
+    const hit  = hm.guessed.has(c) && hm.word.includes(c);
+    const miss = hm.guessed.has(c) && !hm.word.includes(c);
+    return `<button class="key ${hit?'hit':miss?'miss':''}" onclick="guess('${c}')" ${hm.guessed.has(c)?'disabled':''}>${c}</button>`;
+  }).join('');
+}
+
+// ════════════════════════════════
+// HANGMAN LOGIC
+// ════════════════════════════════
+async function startHM(){
+  S.hm = {status:'loading',word:'',guessed:new Set(),mistakes:0,maxMistakes:6,errors:0,details:null,newCard:null};
+  document.getElementById('roverlay').classList.remove('on');
+  renderHM();
+  const w = await getRandWord();
+  S.hm.word = w.toUpperCase();
+  S.hm.status = 'playing';
+  renderHM();
+}
+
+function guess(l){
+  const hm=S.hm;
+  if(hm.status!=='playing' || hm.guessed.has(l)) return;
+  hm.guessed.add(l);
+  if(!hm.word.includes(l)){
+    hm.mistakes++; hm.errors++;
+    const g=document.getElementById('gallows');
+    g.style.animation='none';
+    requestAnimationFrame(()=>{ g.style.animation='shake .35s ease'; });
+    if(hm.mistakes>=hm.maxMistakes){ endHM('lost'); return; }
   } else {
-    const won = hm.word.split('').every(c=>hm.guessed.includes(c));
-    if (won) { hangmanOver('won'); return; }
+    if(hm.word.split('').every(c=>hm.guessed.has(c))){ endHM('won'); return; }
   }
-  renderHangman();
-};
-
-async function hangmanOver(result) {
-  G.hm.status = 'saving'; renderHangman();
-  const word = G.hm.word.toLowerCase();
-  const details = await fetchWordDetails(word);
-  G.hm.details = details;
-  const len = word.length;
-  const hp = len*18+Math.floor(Math.random()*60)+100;
-  const atk = len*12+Math.floor(Math.random()*40)+50;
-  const stars = details.isRare ? 5 : Math.min(5, Math.max(1, Math.floor(len/1.8)));
-  const card = { word:G.hm.word, translation:details.translation, explanation:details.explanation, cefr:details.cefr, hp, atk, stars, isRare:details.isRare, createdAt:Date.now(), isNew:true };
-  G.hm.newCard = card;
-  if (result==='won') await addCard(card);
-  G.hm.status = result; renderHangman();
+  renderHM();
 }
 
-async function addCard(cardData) {
-  if (G.mode==='online' && fbUser && fbDb) {
-    try {
-      const ref = collection(fbDb,'artifacts',fbAppId,'users',fbUser.uid,'cards');
-      await addDoc(ref, cardData); return;
-    } catch(e) {}
+async function endHM(result){
+  S.hm.status='saving'; renderHM();
+  const wd = await fetchWordData(S.hm.word.toLowerCase());
+  S.hm.details = wd;
+  if(result==='won'){
+    const card = buildCard(wd, S.hm.errors, S.hm.maxMistakes);
+    S.cards.unshift(card); S.hm.newCard = card;
+    if(!S.unlockedLib){ S.unlockedLib=true; unlockNav(); }
+    save(); updHdr();
+    if(S.tab!=='library'){
+      const b=document.getElementById('nbadge');
+      b.style.display='flex';
+      b.textContent=S.cards.filter(c=>c.isNew).length;
+    }
   }
-  cardData.id = Date.now().toString(36)+Math.random().toString(36).slice(2);
-  G.cards.unshift(cardData); saveLocal(); updateUI();
+  S.hm.status=result; renderHM(); renderResult(result);
 }
 
-async function removeCard(cardId) {
-  if (G.mode==='online' && fbUser && fbDb) {
-    try { await deleteDoc(doc(fbDb,'artifacts',fbAppId,'users',fbUser.uid,'cards',cardId)); return; }
-    catch(e) {}
-  }
-  G.cards = G.cards.filter(c=>c.id!==cardId); saveLocal(); updateUI();
-}
+function renderResult(result){
+  const hm=S.hm, ov=document.getElementById('roverlay');
+  ov.classList.add('on');
+  const rc=document.getElementById('rcontent');
+  const acc=Math.max(0,1-hm.errors/hm.maxMistakes), ap=Math.round(acc*100);
+  const wd=hm.details;
 
-function renderHangman() {
-  const el = document.getElementById('hm-container'), hm = G.hm;
-  if (hm.status==='loading'||hm.status==='saving') {
-    el.innerHTML = `<div class="flex flex-col items-center my-24 text-center anim-fade">
-      <i class="fas ${hm.status==='saving'?'fa-magnifying-glass text-violet-400':'fa-spinner fa-spin text-indigo-400'} text-6xl mb-6"></i>
-      <p class="font-bold text-lg ${hm.status==='saving'?'text-violet-300':'text-indigo-300'}">${hm.status==='saving'?'正在查詢百科與翻譯...':'尋找單字中...'}</p>
-      ${hm.status==='saving'?'<p class="text-slate-500 text-sm mt-1">連接劍橋字典與字義資料庫</p>':''}
-    </div>`; return;
-  }
-  if (hm.status==='playing') {
-    const wordHTML = hm.word.split('').map(c=>{
-      const shown = hm.guessed.includes(c);
-      return `<span class="inline-flex items-end justify-center w-9 sm:w-11 border-b-[3px] ${shown?'border-indigo-400 text-white':'border-slate-600 text-transparent'} font-display text-2xl sm:text-3xl pb-0.5 mx-0.5">${shown?c:'_'}</span>`;
-    }).join('');
-    const keysHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(c=>{
-      const used = hm.guessed.includes(c);
-      const correct = used && hm.word.includes(c);
-      const wrong = used && !hm.word.includes(c);
-      return `<button class="key-btn ${wrong?'wr':correct?'ok':''}" ${used?'disabled':''} onclick="guess('${c}')">${c}</button>`;
-    }).join('');
-    const remain = hm.maxMistakes-hm.mistakes;
-    el.innerHTML = `<div class="w-full flex flex-col items-center anim-fade">
-      ${hangmanSVG(hm.mistakes)}
-      <div class="flex items-center gap-1.5 mb-6 mt-1">
-        ${Array.from({length:hm.maxMistakes},(_,i)=>`<div class="w-3 h-3 rounded-full transition-colors ${i<remain?'bg-rose-400 shadow-[0_0_5px_rgba(248,113,113,.5)]':'bg-slate-800 border border-slate-700'}"></div>`).join('')}
-        <span class="text-slate-500 text-sm font-bold ml-1">剩餘 ${remain}</span>
+  // meanings HTML — shows partOfSpeech, English def, Chinese translation, example
+  const mHTML = buildMeaningsHTML(wd?.meanings);
+
+  // explanation section — shown alongside OR as fallback
+  const hasExpl = wd?.explanation && wd.explanation.trim().length > 0;
+  // if rare (wiki text), show separately; if it's the 【pos】def fallback, don't double-show
+  const showExplSeparate = hasExpl && wd.isRare && !wd.explanation.startsWith('【');
+  const showExplAsFallback = hasExpl && !mHTML;
+
+  rc.innerHTML=`
+  <div style="text-align:center;margin-bottom:14px">
+    ${result==='won'
+      ? `<div style="font-size:40px;margin-bottom:4px">🎉</div>
+         <div class="ko" style="font-size:28px;color:var(--ok)">CLEAR!</div>
+         <div style="font-size:12px;color:var(--muted);margin-top:2px">猜對了！新卡牌已加入庫中</div>`
+      : `<div style="font-size:40px;margin-bottom:4px">💀</div>
+         <div class="ko" style="font-size:28px;color:var(--danger)">GAME OVER</div>
+         <div style="font-size:12px;color:var(--muted);margin-top:2px">答案是：<strong style="color:#fff">${hm.word}</strong></div>`
+    }
+  </div>
+
+  ${result==='won' && hm.newCard
+    ? `<div style="width:130px;margin:0 auto 14px" class="cdrop"><div class="cw">${cardH(hm.newCard)}</div></div>`
+    : ''}
+
+  <!-- Word info card -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div class="ko" style="font-size:22px;color:#fff;letter-spacing:2px">${(wd?.word||hm.word).toUpperCase()}</div>
+        ${wd?.phonetic ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${wd.phonetic}</div>` : ''}
       </div>
-      <div id="word-disp" class="flex flex-wrap justify-center gap-y-4 mb-10 px-2">${wordHTML}</div>
-      <div class="grid grid-cols-7 gap-1.5 w-full max-w-xs sm:max-w-sm mb-4">${keysHTML}</div>
-    </div>`; return;
+      ${wd?.cefr ? `<div class="tag" style="color:${cCol(wd.cefr)};border-color:${cCol(wd.cefr)}40;background:${cBg(wd.cefr)};font-size:11px;margin-top:2px">${wd.cefr}</div>` : ''}
+    </div>
+    ${wd?.translation
+      ? `<div style="font-size:15px;font-weight:700;color:var(--accent2);margin-bottom:10px">中文翻譯：${wd.translation}</div>`
+      : ''}
+    <div class="dvd"></div>
+    ${mHTML
+      ? `<div style="margin-top:10px">${mHTML}</div>`
+      : showExplAsFallback
+        ? `<div style="font-size:13px;color:var(--text);line-height:1.75;margin-top:8px">${wd.explanation}</div>`
+        : `<div id="dict-patch-zone" style="font-size:13px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:6px">${ICO.spin}查詢字典中…</div>`
+    }
+  </div>
+
+  ${showExplSeparate ? `
+  <div class="dsec" style="margin-bottom:12px">
+    <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.globe} Wikipedia</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.75">${wd.explanation}</div>
+  </div>` : ''}
+
+  ${result==='won' ? `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:12px">
+    <div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:7px">猜測正確率</div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:5px">
+      <span>錯誤：${hm.errors} 次</span>
+      <span style="color:${ap>66?'var(--ok)':ap>33?'#fbbf24':'var(--danger)'}">${ap}%</span>
+    </div>
+    <div style="background:var(--bg3);border-radius:999px;height:5px;overflow:hidden">
+      <div style="height:100%;width:${ap}%;background:${ap>66?'var(--ok)':ap>33?'#fbbf24':'var(--danger)'};border-radius:999px;transition:width .7s .1s"></div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:5px">正確率越高 → 卡牌 HP / ATK 更強</div>
+  </div>` : ''}
+
+  <button class="btn btnp" style="width:100%;font-size:15px;margin-bottom:8px" onclick="startHM()">
+    ${ICO.refresh} 再猜一次
+  </button>
+  ${S.unlockedLib ? `<button class="btn btns" style="width:100%" onclick="goTab('library')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+    卡牌庫（${S.cards.length} 張）
+  </button>` : ''}
+  `;
+
+  // If spinner was shown (no dict data yet), patch asynchronously
+  if(!mHTML && !showExplAsFallback){
+    patchResultDict(wd, result);
   }
-  // 結算
-  const won = hm.status==='won', d = hm.details;
-  el.innerHTML = `<div class="flex flex-col items-center w-full anim-fade mt-2">
-    ${won
-      ?`<p class="font-display text-5xl text-emerald-400 tracking-widest mb-1">SUCCESS!</p>
-        <p class="text-emerald-300/60 text-sm mb-5">獲得新卡牌！</p>
-        ${hm.newCard?`<div class="w-40 mx-auto mb-5 anim-pop">${cardHTML(hm.newCard)}</div>`:''}
-        ${d?`<div class="bg-[#111827] border border-slate-700/40 rounded-2xl p-4 text-left w-full max-w-sm mb-6 anim-zoom relative shadow-lg">
-          <span class="absolute -top-3 left-4 bg-[#080d1a] px-2 text-[10px] font-bold text-indigo-400 border border-slate-700 rounded-full">📖 百科解釋</span>
-          <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap mt-1">${d.explanation}</p>
-        </div>`:''}`
-      :`<p class="font-display text-5xl text-rose-500 tracking-widest mb-1">DEAD</p>
-        <p class="text-slate-500 text-sm mb-5">小人被吊死了 &#9760;</p>
-        <div class="bg-[#0a1a0a] border border-emerald-800/40 rounded-2xl p-5 w-full max-w-sm mb-6 text-center anim-zoom">
-          <p class="text-emerald-500 text-xs font-bold mb-2">正確答案</p>
-          <p class="font-display text-4xl tracking-widest text-white mb-4">${hm.word}</p>
-          ${d?`<div class="text-left"><p class="text-slate-400 text-sm leading-relaxed whitespace-pre-wrap">${d.explanation}</p></div>`:''}
-        </div>`}
-    <button onclick="initHangman()" class="w-full max-w-sm py-4 rounded-2xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95">
-      再猜一次 <kbd class="hidden sm:inline text-xs bg-black/20 px-2 py-0.5 rounded border border-white/20 font-mono">Enter</kbd>
-    </button>
-  </div>`;
 }
 
-// ── Library ───────────────────────────────────────────────────
-function renderLibrary() {
-  const el = document.getElementById('lib-container');
-  G.cards.forEach(c=>{ if(c.isNew){ c.isNew=false; if(G.mode==='online'&&fbUser&&fbDb) updateDoc(doc(fbDb,'artifacts',fbAppId,'users',fbUser.uid,'cards',c.id),{isNew:false}).catch(()=>{}); }});
-  saveLocal(); updateUI();
-  if (!G.cards.length) { el.innerHTML=`<div class="col-span-2 text-center text-slate-600 py-20"><i class="fas fa-ghost text-4xl mb-4 block"></i>還沒有卡牌，快去猜單字吧！</div>`; return; }
-  el.innerHTML = G.cards.map(c=>`<div class="cursor-pointer transition-all hover:scale-105 hover:-translate-y-1" onclick="openCard('${c.id}')">${cardHTML(c)}</div>`).join('');
+// Fill in the dict-patch-zone after the DOM renders, with extra wiki attempts
+async function patchResultDict(wd, result){
+  const w = wd?.word || S.hm.word.toLowerCase();
+
+  // Try Wikipedia (EN) as the main fallback for words like "wanderlust"
+  let patchText = '';
+
+  // 1. Try English Wiktionary via MediaWiki API
+  try{
+    const r = await sfetch(`https://en.wiktionary.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(w)}&format=json&origin=*`, 5000);
+    if(r){
+      const d = await r.json();
+      const pages = d?.query?.pages;
+      const id = pages ? Object.keys(pages)[0] : '-1';
+      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 30){
+        patchText = pages[id].extract.slice(0, 400);
+      }
+    }
+  }catch(e){}
+
+  // 2. If still nothing, try English Wikipedia
+  if(!patchText){
+    try{
+      const r = await sfetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(w)}&redirects=1&format=json&origin=*`, 5000);
+      if(r){
+        const d = await r.json();
+        const pages = d?.query?.pages;
+        const id = pages ? Object.keys(pages)[0] : '-1';
+        if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 30){
+          patchText = pages[id].extract.slice(0, 400);
+        }
+      }
+    }catch(e){}
+  }
+
+  // Update wd.explanation and the card if we got something
+  if(patchText && wd){ wd.explanation = patchText; }
+
+  // Try one more translation pass if missing
+  let patchTr = wd?.translation || '';
+  if(!patchTr || /^[a-zA-Z]/.test(patchTr)){
+    patchTr = await getTranslation(w);
+    if(patchTr && wd) wd.translation = patchTr;
+  }
+
+  // Also update the saved card if won
+  if(result==='won' && S.hm.newCard){
+    if(patchText)  S.hm.newCard.explanation = patchText;
+    if(patchTr && !/^[a-zA-Z]/.test(patchTr)) S.hm.newCard.translation = patchTr;
+    save();
+  }
+
+  // Patch the DOM — update just the dict zone if still visible
+  const zone = document.getElementById('dict-patch-zone');
+  if(zone){
+    if(patchText){
+      zone.style.color = 'var(--text)';
+      zone.style.lineHeight = '1.75';
+      zone.style.fontSize = '13px';
+      zone.innerHTML = `<div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px">${ICO.globe} Wikipedia / Wiktionary</div>${patchText.replace(/\n/g,'<br>')}`;
+    } else {
+      zone.innerHTML = `<span style="color:var(--muted);font-size:12px">（此單字暫無線上字典資料）</span>`;
+    }
+  }
+
+  // Also patch translation display if it updated
+  const trEl = document.getElementById('result-tr-display');
+  if(trEl && patchTr && !/^[a-zA-Z]/.test(patchTr)){
+    trEl.textContent = `中文翻譯：${patchTr}`;
+  }
 }
 
-window.openCard = function(id) {
-  const c = G.cards.find(x=>x.id===id); if(!c) return;
-  const cc = ['A1','A2','B1','B2','C1','C2'].includes(c.cefr)?`cefr-${c.cefr}`:'cefr-X';
-  document.getElementById('card-modal-body').innerHTML = `
-    <div class="w-44 mx-auto mb-5 hover:scale-105 transition-transform">${cardHTML(c)}</div>
-    <div class="w-full bg-[#080d1a] rounded-2xl p-5 text-left border border-slate-800 shadow-inner">
-      <h4 class="text-indigo-400 font-bold mb-3 flex items-center gap-2"><i class="fas fa-book-journal-whills"></i>百科與字義解釋</h4>
-      <p class="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">${c.explanation||'暫無解釋'}</p>
-      <div class="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
-        <span class="cefr ${cc}">CEFR ${c.cefr||'?'}</span>
-        <span class="text-xs text-slate-600"><i class="far fa-clock mr-1"></i>${new Date(c.createdAt).toLocaleDateString()}</span>
+// ════════════════════════════════
+// LIBRARY
+// ════════════════════════════════
+function renderLib(){
+  S.cards.forEach(c=>c.isNew=false); save();
+  document.getElementById('nbadge').style.display='none';
+  const g=document.getElementById('libgrid');
+  if(!S.cards.length){
+    g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4" style="display:block;margin:0 auto 10px"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><line x1="17" y1="11" x2="23" y2="11"/></svg>
+      還沒有卡牌，先去猜單字吧！</div>`;
+    return;
+  }
+  g.innerHTML = S.cards.map(c=>`<div class="cw" onclick="oModal('${c.id}')">${cardH(c)}</div>`).join('');
+}
+
+// ════════════════════════════════
+// CARD MODAL
+// ════════════════════════════════
+
+// Build meanings HTML from a meanings array
+function buildMeaningsHTML(meanings){
+  if(!meanings || !meanings.length) return '';
+  return meanings.map(m=>`
+    <div style="margin-bottom:13px">
+      <span class="ptag">${m.partOfSpeech}</span>
+      ${m.definitions.map((d,di)=>`
+        <div style="margin-bottom:${di<m.definitions.length-1?'8px':'0'}">
+          <div class="ddef">• ${d.def}</div>
+          ${d.zh  ? `<div class="dzh" style="padding-left:10px;margin-top:2px">▶ 中文：${d.zh}</div>` : ''}
+          ${d.example ? `<div class="dex" style="margin-top:3px">"${d.example}"</div>` : ''}
+        </div>
+      `).join('')}
+    </div>`).join('');
+}
+
+// Render modal content from card data (can be called multiple times as data loads)
+function renderModalContent(card){
+  const mc = document.getElementById('mcontent');
+  if(!mc) return;
+  const cc = cCol(card.cefr);
+  const starsH = Array.from({length:6},(_,i)=>ICO.star(i<card.stars,cc)).join('');
+  const mHTML  = buildMeaningsHTML(card.meanings);
+
+  // Show meanings OR explanation fallback
+  let dictSection = '';
+  if(mHTML){
+    dictSection = `
+    <div class="dsec">
+      <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.book} 字義與詞性</div>
+      ${mHTML}
+    </div>`;
+  } else if(card.explanation){
+    // Old-style explanation string — parse if it looks like 【pos】def format
+    const expLines = card.explanation.split('\n').filter(Boolean);
+    const parsedBlocks = expLines.map(line=>{
+      const m = line.match(/^【([^】]+)】(.+)/);
+      if(m) return `<div style="margin-bottom:10px"><span class="ptag">${m[1]}</span><div class="ddef" style="margin-top:4px">• ${m[2]}</div></div>`;
+      return `<div style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:6px">${line}</div>`;
+    }).join('');
+    dictSection = `
+    <div class="dsec">
+      <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.book} 字義說明</div>
+      ${parsedBlocks}
+    </div>`;
+  } else {
+    dictSection = `
+    <div class="dsec" id="dict-loading-${card.id}">
+      <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.book} 字義與詞性</div>
+      <div style="font-size:13px;color:var(--muted);display:flex;align-items:center;gap:7px">
+        ${ICO.spin} 查詢字典中…
       </div>
     </div>`;
-  document.getElementById('card-modal').classList.remove('hidden');
-};
-window.closeModal = ()=>document.getElementById('card-modal').classList.add('hidden');
-
-// ── UI ────────────────────────────────────────────────────────
-function updateUI() {
-  document.getElementById('hdr-count').textContent = G.cards.length;
-  const btn = document.getElementById('tab-arena');
-  if (G.cards.length>=4) {
-    btn.disabled = false;
-    document.getElementById('arena-nav-icon').className = 'fas fa-swords text-2xl mb-0.5';
-    document.getElementById('arena-nav-label').textContent = '競技場';
-  }
-  const unseen = G.cards.filter(c=>c.isNew).length;
-  const b = document.getElementById('lib-badge');
-  if (unseen>0 && G.activeTab!=='library') { b.textContent=unseen; b.classList.remove('hidden'); } else b.classList.add('hidden');
-}
-
-window.switchTab = function(id) {
-  if (id==='arena'&&G.cards.length<4) return;
-  G.activeTab = id;
-  ['hangman','library','arena'].forEach(t=>{
-    document.getElementById(`view-${t}`).classList.add('hidden');
-    document.getElementById(`tab-${t}`).classList.remove('active');
-  });
-  document.getElementById(`view-${id}`).classList.remove('hidden');
-  document.getElementById(`tab-${id}`).classList.add('active');
-  if (id==='library') renderLibrary();
-  if (id==='arena') renderArena();
-};
-
-// ── Arena ─────────────────────────────────────────────────────
-window.toggleDeckCard = function(id) {
-  const idx = G.arena.deck.findIndex(c=>c.id===id);
-  if (idx>=0) G.arena.deck.splice(idx,1);
-  else if (G.arena.deck.length<4) G.arena.deck.push(G.cards.find(c=>c.id===id));
-  renderArena();
-};
-
-function renderArena() {
-  const el = document.getElementById('arena-container');
-  const v = G.arena.view;
-  if (v==='deck_select') renderDeckSelect(el);
-  else if (v==='ai_battle') renderAIBattle(el);
-  else if (v==='lobby') renderLobby(el);
-  else if (v==='room') renderRoom(el);
-}
-
-function renderDeckSelect(el) {
-  const {deck} = G.arena;
-  const slots = deck.map(c=>`
-    <div class="relative cursor-pointer hover:-translate-y-2 transition-transform" onclick="toggleDeckCard('${c.id}')">
-      <div class="absolute -top-1 -right-1 bg-rose-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold z-10"><i class="fas fa-times"></i></div>
-      <div class="scale-[0.72] origin-top-left" style="margin-right:-28px">${cardHTML(c)}</div>
-    </div>`).join('');
-  const cardList = G.cards.map(c=>{
-    const sel = deck.find(x=>x.id===c.id);
-    return `<div onclick="toggleDeckCard('${c.id}')" class="cursor-pointer transition-all ${sel?'ring-2 ring-indigo-500 scale-95 opacity-40 rounded-xl':'hover:scale-105'}">${cardHTML(c)}</div>`;
-  }).join('');
-  el.innerHTML = `<div class="anim-fade pb-10">
-    <h2 class="font-display text-3xl tracking-widest text-center text-indigo-300 mb-1">BUILD DECK</h2>
-    <p class="text-slate-500 text-sm text-center mb-4">選擇 <strong class="text-white text-base">${deck.length}/4</strong> 張 · 三局兩勝 · 贏了搶對手一張，輸了失去一張！</p>
-    <div class="flex gap-2 justify-start min-h-[130px] p-4 bg-[#111827] rounded-2xl border border-slate-700/50 mb-4 overflow-x-auto no-sb items-start">
-      ${deck.length?slots:`<div class="text-slate-600 m-auto flex flex-col items-center gap-2 w-full text-center"><i class="fas fa-hand-pointer text-2xl"></i>點擊下方卡牌加入</div>`}
-    </div>
-    <div class="grid grid-cols-2 gap-3 mb-5">
-      <button onclick="startAIBattle()" ${deck.length<4?'disabled':''} class="py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${deck.length===4?'bg-violet-700 hover:bg-violet-600 text-white active:scale-95 shadow-lg shadow-violet-900/30':'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700'}">
-        <i class="fas fa-robot"></i>單機 vs AI
-      </button>
-      <button onclick="enterLobby()" ${deck.length<4?'disabled':''} class="py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${deck.length===4?'bg-indigo-700 hover:bg-indigo-600 text-white active:scale-95 shadow-lg shadow-indigo-900/30':'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700'}">
-        <i class="fas fa-globe"></i>連線對戰
-      </button>
-    </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${cardList}</div>
-  </div>`;
-}
-
-// ── AI Battle ─────────────────────────────────────────────────
-window.startAIBattle = function() {
-  if (G.arena.deck.length<4) return;
-  // AI 從玩家所有牌中隨機選4張（不一樣）
-  const pool = [...G.cards].sort(()=>Math.random()-.5);
-  const aiDeck = pool.slice(0, Math.min(4, pool.length));
-  while (aiDeck.length<4) aiDeck.push(G.arena.deck[aiDeck.length%4]);
-  G.arena.aiState = { deck: aiDeck, currentIdx:null, wins:0, usedCards:[] };
-  G.arena.myAiState = { deck:[...G.arena.deck], currentIdx:null, wins:0, usedCards:[] };
-  G.arena.roundResult = null; G.arena.aiRound=1; G.arena.aiMyWins=0; G.arena.aiOpWins=0;
-  G.arena.view = 'ai_battle'; renderArena();
-};
-
-function renderAIBattle(el) {
-  const me = G.arena.myAiState, ai = G.arena.aiState;
-  const rr = G.arena.roundResult;
-  const fin = G.arena.aiMyWins>=2 || G.arena.aiOpWins>=2 || G.arena.aiRound>3;
-
-  if (fin) {
-    const won = G.arena.aiMyWins > G.arena.aiOpWins;
-    const tied = G.arena.aiMyWins === G.arena.aiOpWins;
-    let body = '';
-    if (!tied && won) {
-      const avail = ai.deck.filter((_,i)=>!ai.usedCards.includes(i));
-      const stolen = avail.length ? avail[Math.floor(Math.random()*avail.length)] : ai.deck[0];
-      const stolenJSON = JSON.stringify({...stolen, id:undefined, isNew:true, createdAt:0});
-      body = `<p class="font-display text-5xl text-yellow-400 tracking-widest mb-2">VICTORY!</p>
-        <p class="text-yellow-300/70 text-sm mb-5">搶到 AI 的一張卡牌！</p>
-        <div class="w-40 mx-auto mb-5 anim-pop">${cardHTML(stolen)}</div>
-        <p class="text-slate-300 text-sm mb-5">「${stolen.word}」加入你的收藏！</p>
-        <button onclick='handleAIWin(${stolenJSON})' class="w-full py-4 rounded-2xl bg-yellow-600 hover:bg-yellow-500 font-bold text-lg active:scale-95 shadow-lg transition-all">收下卡牌並返回</button>`;
-    } else if (!tied && !won) {
-      const avail2 = me.deck.filter((_,i)=>!me.usedCards.includes(i));
-      const lost = avail2.length ? avail2[Math.floor(Math.random()*avail2.length)] : me.deck[0];
-      body = `<p class="font-display text-5xl text-rose-500 tracking-widest mb-2">DEFEAT</p>
-        <p class="text-rose-400/70 text-sm mb-5">失去了一張卡牌...</p>
-        <div class="w-40 mx-auto mb-5 opacity-40 grayscale">${cardHTML(lost)}</div>
-        <p class="text-slate-400 text-sm mb-5">「${lost.word}」被 AI 奪走了</p>
-        <button onclick="handleAILose('${lost.id}')" class="w-full py-4 rounded-2xl bg-rose-700 hover:bg-rose-600 font-bold text-lg active:scale-95 transition-all">承認失敗並返回</button>`;
-    } else {
-      body = `<p class="font-display text-5xl text-slate-300 tracking-widest mb-4">DRAW</p>
-        <p class="text-slate-500 text-sm mb-6">平局！各自保留卡牌</p>
-        <button onclick="G.arena.view='deck_select';renderArena()" class="w-full py-4 rounded-2xl bg-slate-700 hover:bg-slate-600 font-bold text-lg active:scale-95">返回</button>`;
-    }
-    el.innerHTML = `<div class="max-w-sm mx-auto anim-zoom text-center">${body}</div>`; return;
   }
 
-  const myReady = me.currentIdx!==null;
-  const handHTML = me.deck.map((c,i)=>{
-    const used = me.usedCards.includes(i), sel = me.currentIdx===i;
-    return `<div onclick="${!used&&!myReady?`pickAICard(${i})`:'void 0'}" class="shrink-0 w-[90px] cursor-${used||myReady?'default':'pointer'} transition-all ${used?'opacity-20 grayscale scale-90':sel?'ring-2 ring-indigo-400 -translate-y-4 rounded-xl scale-105':myReady?'opacity-60':'hover:-translate-y-3 hover:scale-105'}">${cardHTML(c)}</div>`;
-  }).join('');
+  // Wikipedia section (for rare/proper nouns)
+  const wikiSection = (card.isRare && card.explanation && !card.explanation.startsWith('【'))
+    ? `<div class="dsec">
+        <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.globe} Wikipedia</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.75">${card.explanation}</div>
+      </div>` : '';
 
-  let battleArea = '';
-  if (rr) {
-    battleArea = `<div class="flex items-center justify-center gap-4 py-4 anim-zoom">
-      <div class="relative w-32"><div class="opacity-80">${cardHTML(rr.aiCard)}</div><div class="absolute -bottom-3 right-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm rotate-3 border border-white/20">-${rr.myDmg}</div></div>
-      <div class="font-display text-3xl text-yellow-400/70">VS</div>
-      <div class="relative w-32"><div class="opacity-80">${cardHTML(rr.myCard)}</div><div class="absolute -bottom-3 left-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm -rotate-3 border border-white/20">-${rr.aiDmg}</div></div>
-    </div>
-    <p class="text-center text-sm font-bold mb-2 ${rr.myCard.hp-rr.aiDmg > rr.aiCard.hp-rr.myDmg?'text-emerald-400':'rr.myCard.hp-rr.aiDmg===rr.aiCard.hp-rr.myDmg?\'text-slate-400\'':'text-rose-400'}">
-      ${rr.myCard.hp-rr.aiDmg > rr.aiCard.hp-rr.myDmg ? '🏆 這局獲勝！' : rr.myCard.hp-rr.aiDmg===rr.aiCard.hp-rr.myDmg ? '⚖ 平局' : '💀 這局落敗'}
-    </p>`;
-  } else if (myReady) {
-    battleArea = `<div class="text-center py-6 text-slate-500 anim-fade"><i class="fas fa-spinner fa-spin text-indigo-400 text-3xl mb-2 block"></i>AI 思考中...</div>`;
-  } else {
-    battleArea = `<div class="text-center py-6 text-slate-600 italic text-sm">從下方選擇出戰卡牌</div>`;
-  }
-
-  el.innerHTML = `<div class="anim-fade max-w-sm mx-auto">
-    <div class="flex justify-between items-center mb-4 bg-[#111827] p-3 rounded-2xl border border-slate-700/50 shadow">
-      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">我方</p><p class="text-2xl font-bold text-blue-400">${G.arena.aiMyWins}</p></div>
-      <div class="text-center"><p class="text-xs text-slate-600 font-bold uppercase tracking-widest">Round</p><p class="text-xl font-bold">${Math.min(G.arena.aiRound,3)}/3</p></div>
-      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">AI</p><p class="text-2xl font-bold text-rose-400">${G.arena.aiOpWins}</p></div>
-    </div>
-    <div class="bg-[#111827] rounded-2xl border border-slate-700/30 min-h-[220px] flex flex-col justify-center px-4">${battleArea}</div>
-    <div class="mt-3 ${myReady||rr?'opacity-50 pointer-events-none':''}">
-      <p class="text-center text-xs text-slate-500 mb-2 font-bold">${myReady?'等待 AI...':'選擇出戰卡牌'}</p>
-      <div class="flex gap-2 justify-center overflow-x-auto no-sb py-2 px-1 min-h-[120px] items-end">${handHTML}</div>
-    </div>
-  </div>`;
-}
-
-window.pickAICard = function(idx) {
-  const me = G.arena.myAiState;
-  if (me.currentIdx!==null || me.usedCards.includes(idx)) return;
-  me.currentIdx = idx; renderArena();
-  setTimeout(()=>{
-    const ai = G.arena.aiState;
-    const avail = ai.deck.map((_,i)=>i).filter(i=>!ai.usedCards.includes(i));
-    ai.currentIdx = avail[Math.floor(Math.random()*avail.length)] ?? 0;
-    resolveAIRound();
-  }, 800+Math.random()*700);
-};
-
-function resolveAIRound() {
-  const me = G.arena.myAiState, ai = G.arena.aiState;
-  const mc = me.deck[me.currentIdx], ac = ai.deck[ai.currentIdx];
-  const aiDmg = ac.atk, myDmg = mc.atk;
-  G.arena.roundResult = { myCard:mc, aiCard:ac, myDmg, aiDmg };
-  if (mc.hp-aiDmg > ac.hp-myDmg) G.arena.aiMyWins++;
-  else if (ac.hp-myDmg > mc.hp-aiDmg) G.arena.aiOpWins++;
-  me.usedCards.push(me.currentIdx); ai.usedCards.push(ai.currentIdx);
-  G.arena.aiRound++;
-  renderArena();
-  setTimeout(()=>{ me.currentIdx=null; ai.currentIdx=null; G.arena.roundResult=null; renderArena(); }, 2800);
-}
-
-window.handleAIWin = async function(stolenCard) {
-  stolenCard.createdAt = Date.now();
-  await addCard(stolenCard);
-  toast(`獲得 ${stolenCard.word}！`);
-  G.arena.view = 'deck_select'; G.arena.deck = []; renderArena();
-};
-window.handleAILose = async function(lostId) {
-  await removeCard(lostId);
-  toast('失去了一張卡牌...', true);
-  G.arena.view = 'deck_select'; G.arena.deck = []; renderArena();
-};
-
-// ── Online Lobby ──────────────────────────────────────────────
-window.enterLobby = function() {
-  if (G.mode!=='online') { toast('需要連線才能進入連線大廳！', true); return; }
-  G.arena.view = 'lobby';
-  if (fbUnsubMatches) fbUnsubMatches();
-  const ref = collection(fbDb,'artifacts',fbAppId,'public','data','matches');
-  fbUnsubMatches = onSnapshot(ref, snap=>{
-    const all = snap.docs.map(d=>({id:d.id,...d.data()}));
-    G.arena.rooms = all.filter(m=>m.status==='waiting'&&m.player1!==fbUser.uid);
-    if (G.arena.matchId) {
-      const mine = all.find(m=>m.id===G.arena.matchId);
-      if (mine) {
-        G.arena.matchData = mine;
-        if (mine.status==='playing') G.arena.view='room';
-        if (mine.player1===fbUser.uid && mine.status==='playing' && mine.p1State?.ready && mine.p2State?.ready && !mine.resolving)
-          resolveOnlineRound(mine.id, mine);
-      } else { G.arena.matchId=null; G.arena.matchData=null; G.arena.view='lobby'; }
-    }
-    if (G.activeTab==='arena') renderArena();
-  });
-  renderArena();
-};
-
-function renderLobby(el) {
-  const rooms = G.arena.rooms;
-  const roomsHTML = rooms.length
-    ? rooms.map(r=>`<div class="bg-[#111827] border border-slate-700/50 p-4 rounded-xl flex justify-between items-center shadow">
-        <div class="flex items-center gap-3"><i class="fas fa-spinner fa-spin text-indigo-400 text-lg"></i><span class="font-bold">${r.p1Name||'玩家'}<span class="text-slate-500 text-sm font-normal ml-1">的擂台</span></span></div>
-        <button onclick="joinRoom('${r.id}')" class="bg-emerald-700 hover:bg-emerald-600 px-5 py-2 rounded-lg font-bold shadow active:scale-95 transition-all">加入</button>
-      </div>`).join('')
-    : `<div class="text-center text-slate-600 py-12 bg-[#111827]/50 rounded-2xl border border-slate-700/30 border-dashed">還沒有房間，自己開一個吧！</div>`;
-  el.innerHTML = `<div class="anim-fade max-w-md mx-auto">
-    <div class="flex justify-between items-center mb-5">
-      <h2 class="font-display text-2xl tracking-widest text-indigo-300">ONLINE LOBBY</h2>
-      <button onclick="G.arena.view='deck_select';renderArena()" class="text-xs text-slate-400 bg-slate-800 px-3 py-1.5 rounded-full hover:bg-slate-700 transition-colors">重新選牌</button>
-    </div>
-    <button onclick="createRoom()" class="w-full bg-indigo-700 hover:bg-indigo-600 text-white font-bold py-4 rounded-2xl mb-6 flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
-      <i class="fas fa-plus-circle text-xl"></i>創建房間
+  mc.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+    <button onclick="cModal()" style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+      ${ICO.x}
     </button>
-    <div class="space-y-3">${roomsHTML}</div>
+    <div style="text-align:right">
+      <div style="display:flex;gap:2px;justify-content:flex-end;margin-bottom:3px">${starsH}</div>
+      <div class="tag" style="font-size:10px;color:${cc};border-color:${cc}35;background:${cBg(card.cefr)}">${card.cefr}</div>
+    </div>
+  </div>
+
+  <div style="width:130px;margin:0 auto 14px"><div class="cw">${cardH(card)}</div></div>
+
+  <div style="text-align:center;margin-bottom:16px">
+    <div class="ko" style="font-size:26px;letter-spacing:3px;color:#fff">${card.word}</div>
+    ${card.phonetic ? `<div style="font-size:12px;color:var(--muted);margin-top:3px">${card.phonetic}</div>` : ''}
+    ${card.translation
+      ? `<div style="font-size:17px;font-weight:700;color:var(--accent2);margin-top:6px;padding:6px 14px;background:var(--bg3);border-radius:8px;display:inline-block;border:1px solid var(--border)">
+           中文翻譯：${card.translation}
+         </div>`
+      : ''}
+  </div>
+
+  ${dictSection}
+  ${wikiSection}
+
+  <div class="dsec">
+    <div class="dlbl" style="display:flex;align-items:center;gap:5px">${ICO.chart} 卡牌數值</div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:8px">
+      <div style="flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:10px;color:#ff6b6b;font-weight:700;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:3px">${ICO.heart} HP</div>
+        <div style="font-size:24px;font-weight:900;color:#ff6b6b">${card.hp}</div>
+      </div>
+      <div style="flex:1;text-align:center;background:var(--bg);border-radius:10px;padding:10px;border:1px solid var(--border)">
+        <div style="font-size:10px;color:#74b9ff;font-weight:700;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:3px">${ICO.bolt} ATK</div>
+        <div style="font-size:24px;font-weight:900;color:#74b9ff">${card.atk}</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.6">
+      CEFR 越高 × 字義越豐富 × 猜測越準確 → 數值越強
+    </div>
   </div>`;
 }
 
-window.createRoom = async function() {
-  const ref = collection(fbDb,'artifacts',fbAppId,'public','data','matches');
-  const n = await addDoc(ref,{status:'waiting',player1:fbUser.uid,p1Name:'玩家'+fbUser.uid.slice(-4),
-    p1State:{team:G.arena.deck,currentCardIndex:null,wins:0,ready:false,usedCards:[]},round:1,resolving:false,createdAt:Date.now()});
-  G.arena.matchId = n.id; G.arena.view = 'room'; renderArena();
-};
-window.joinRoom = async function(id) {
-  const ref = doc(fbDb,'artifacts',fbAppId,'public','data','matches',id);
-  await updateDoc(ref,{status:'playing',player2:fbUser.uid,p2Name:'玩家'+fbUser.uid.slice(-4),
-    p2State:{team:G.arena.deck,currentCardIndex:null,wins:0,ready:false,usedCards:[]}});
-  G.arena.matchId = id; G.arena.view = 'room'; renderArena();
-};
-window.leaveRoom = async function() {
-  if (G.arena.matchId && G.arena.matchData?.player1===fbUser.uid && G.arena.matchData?.status==='waiting')
-    await deleteDoc(doc(fbDb,'artifacts',fbAppId,'public','data','matches',G.arena.matchId));
-  G.arena.matchId=null; G.arena.matchData=null; G.arena.view='lobby'; renderArena();
-};
+async function oModal(cid){
+  const card = S.cards.find(c=>c.id===cid); if(!card) return;
+  document.getElementById('mbg').classList.add('on');
 
-function renderRoom(el) {
-  const match = G.arena.matchData; if (!match) return;
-  const isP1 = match.player1===fbUser.uid;
-  const mySt = isP1?match.p1State:match.p2State;
-  const opSt = isP1?match.p2State:match.p1State;
-  const fin = match.status==='finished';
-  const res = match.resolving;
-  const lr = match.lastResult;
+  // Render immediately with what we have
+  renderModalContent(card);
 
-  if (match.status==='waiting') {
-    el.innerHTML = `<div class="flex flex-col items-center py-24 anim-fade text-center">
-      <i class="fas fa-circle-notch fa-spin text-indigo-500 text-7xl mb-8"></i>
-      <h2 class="text-2xl font-bold mb-2">等待對手加入...</h2>
-      <p class="text-slate-500 mb-10">你的擂台已準備好</p>
-      <button onclick="leaveRoom()" class="px-8 py-3 border border-rose-500/40 text-rose-400 font-bold rounded-full hover:bg-rose-900/20 transition-colors">取消並離開</button>
-    </div>`; return;
-  }
+  // If card is missing meanings AND explanation — it's an old/incomplete card; refetch now
+  const needsRefetch = (!card.meanings || !card.meanings.length) && !card.explanation;
+  const hasNoTranslation = !card.translation || /^[a-zA-Z]/.test(card.translation) && card.translation.toLowerCase() === card.wordLower;
 
-  let opZone = '', myZone = '';
-  if (res && lr) {
-    const opCard = isP1?lr.p2Card:lr.p1Card, myCard = isP1?lr.p1Card:lr.p2Card;
-    const opDmg = isP1?lr.p1Dmg:lr.p2Dmg, myDmg = isP1?lr.p2Dmg:lr.p1Dmg;
-    opZone = `<div class="relative w-32"><div class="opacity-80">${cardHTML(opCard)}</div><div class="absolute -bottom-3 right-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm rotate-6 border border-white/10">-${myDmg}</div></div>`;
-    myZone = `<div class="relative w-32"><div class="opacity-80">${cardHTML(myCard)}</div><div class="absolute -bottom-3 left-0 bg-rose-600 px-2 py-0.5 rounded font-bold text-sm -rotate-6 border border-white/10">-${opDmg}</div></div>`;
-  } else {
-    opZone = opSt.ready ? `<div class="w-32">${cardHTML({},true)}</div>` : `<div class="w-32 aspect-[3/4] border border-dashed border-slate-700 rounded-xl flex items-center justify-center text-slate-600 text-sm bg-[#111827]/50"><i class="fas fa-ellipsis animate-pulse text-xl"></i></div>`;
-    myZone = mySt.ready ? `<div class="w-32">${cardHTML(mySt.team[mySt.currentCardIndex])}</div>` : `<div class="w-32 aspect-[3/4] border-2 border-dashed border-indigo-500/40 rounded-xl flex items-center justify-center text-indigo-500/70 font-bold text-sm text-center px-2">點擊<br>選擇出牌</div>`;
-  }
-
-  let finHTML = '';
-  if (fin) {
-    const won = mySt.wins>opSt.wins, tied = mySt.wins===opSt.wins;
-    if (!tied && won) {
-      const stolen = opSt.team[Math.floor(Math.random()*opSt.team.length)];
-      const sj = JSON.stringify({...stolen, id:undefined, isNew:true, createdAt:0});
-      finHTML = `<div class="text-center mt-4 anim-zoom">
-        <p class="font-display text-4xl text-yellow-400 mb-2">VICTORY!</p>
-        <p class="text-slate-300 text-sm mb-4">搶到對手的一張卡牌！</p>
-        <div class="w-36 mx-auto mb-4 anim-pop">${cardHTML(stolen)}</div>
-        <button onclick='handleOnlineWin(${sj})' class="w-full py-3 rounded-xl bg-yellow-600 hover:bg-yellow-500 font-bold text-base active:scale-95 transition-all shadow-lg">收下並返回大廳</button>
-      </div>`;
-    } else if (!tied && !won) {
-      const lost = mySt.team[Math.floor(Math.random()*mySt.team.length)];
-      finHTML = `<div class="text-center mt-4 anim-zoom">
-        <p class="font-display text-4xl text-rose-500 mb-2">DEFEAT</p>
-        <p class="text-slate-400 text-sm mb-4">失去了一張卡牌...</p>
-        <div class="w-36 mx-auto mb-4 opacity-40 grayscale">${cardHTML(lost)}</div>
-        <button onclick="handleOnlineLose('${lost.id}')" class="w-full py-3 rounded-xl bg-rose-700 hover:bg-rose-600 font-bold text-base active:scale-95 transition-all">承認失敗並返回</button>
-      </div>`;
-    } else {
-      finHTML = `<div class="text-center mt-4 anim-zoom">
-        <p class="font-display text-4xl text-slate-300 mb-4">DRAW</p>
-        <button onclick="leaveRoom()" class="w-full py-3 rounded-xl bg-slate-700 font-bold text-base active:scale-95">返回大廳</button>
-      </div>`;
+  if(needsRefetch || hasNoTranslation){
+    // Show loading indicator if no dict data
+    const wd = await fetchWordData(card.wordLower || card.word.toLowerCase());
+    // Patch the card in-place
+    if(wd.meanings?.length)   card.meanings    = wd.meanings;
+    if(wd.explanation)        card.explanation  = wd.explanation;
+    if(wd.phonetic)           card.phonetic     = wd.phonetic;
+    if(wd.translation && !/^[a-zA-Z]/.test(wd.translation)) card.translation = wd.translation;
+    if(wd.cefr && card.cefr !== wd.cefr){
+      card.cefr  = wd.cefr;
+      card.stars = c2s(wd.cefr);
+    }
+    save();
+    // Re-render modal with fresh data (only if still open)
+    if(document.getElementById('mbg').classList.contains('on')){
+      renderModalContent(card);
     }
   }
+}
 
-  const handHTML = !fin ? mySt.team.map((c,i)=>{
-    const used = mySt.usedCards?.includes(i), sel = mySt.currentCardIndex===i;
-    return `<div onclick="${!used&&!mySt.ready?`playOnlineCard(${i})`:'void 0'}" class="shrink-0 w-[90px] cursor-${used||mySt.ready?'default':'pointer'} transition-all ${used?'opacity-20 grayscale scale-90':sel?'ring-2 ring-indigo-400 -translate-y-4 rounded-xl scale-105':mySt.ready?'opacity-60':'hover:-translate-y-3 hover:scale-105'}">${cardHTML(c)}</div>`;
-  }).join('') : '';
+function cModal(){ document.getElementById('mbg').classList.remove('on'); }
 
-  el.innerHTML = `<div class="anim-fade max-w-sm mx-auto">
-    <div class="flex justify-between items-center mb-4 bg-[#111827] p-3 rounded-2xl border border-slate-700/50 shadow">
-      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">我方</p><p class="text-2xl font-bold text-blue-400">${mySt.wins}</p></div>
-      <div class="text-center"><p class="text-xs text-slate-600 font-bold uppercase tracking-widest">Round</p><p class="text-xl font-bold">${Math.min(match.round,3)}/3</p></div>
-      <div class="text-center"><p class="text-xs text-slate-500 mb-0.5">對手</p><p class="text-2xl font-bold text-rose-400">${opSt.wins}</p></div>
+// ════════════════════════════════
+// NAV
+// ════════════════════════════════
+function unlockNav(){ document.getElementById('nb-library').classList.remove('lk'); }
+function goTab(tab){
+  if(tab==='library' && !S.unlockedLib){ toast('先猜出第一個單字來解鎖！'); return; }
+  if(tab==='arena'   && S.cards.length<4){ toast(`競技場需要 4 張卡牌（目前 ${S.cards.length} 張）`); return; }
+  S.tab=tab;
+  ['hangman','library','arena'].forEach(t=>{
+    document.getElementById(`view-${t}`).classList.toggle('on', t===tab);
+    document.getElementById(`nb-${t}`).classList.toggle('on', t===tab);
+  });
+  if(tab==='library') renderLib();
+  if(tab==='arena' && S.ar.phase==='mode') renderAMode();
+}
+function updHdr(){
+  document.getElementById('hcount').textContent = S.cards.length;
+  if(S.cards.length>=4) document.getElementById('nb-arena').classList.remove('lk');
+}
+
+// ════════════════════════════════════════
+// ARENA
+// ════════════════════════════════════════
+function aBack(){
+  if(S.ar.conn){try{S.ar.conn.close()}catch(e){}S.ar.conn=null;}
+  if(S.ar.peer){try{S.ar.peer.destroy()}catch(e){}S.ar.peer=null;}
+  S.ar.phase='mode'; S.ar.deck=[]; renderAMode();
+}
+const aIn = ()=>document.getElementById('arena-inner');
+
+// ── Mode select ──
+function renderAMode(){
+  aIn().innerHTML=`
+  <div style="padding:6px 0 14px">
+    <div style="font-size:11px;color:var(--muted);text-align:center;letter-spacing:1px;margin-bottom:16px">選擇對戰模式</div>
+    <div class="mcard" onclick="aSel('ai')">
+      <div class="mico" style="background:#7c6aff22;color:var(--accent)">${ICO.robot}</div>
+      <div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:2px">AI 對戰</div>
+        <div style="font-size:12px;color:var(--muted)">和電腦進行三局兩勝，隨時可玩</div>
+      </div>
+      <span style="color:var(--muted);margin-left:auto;flex-shrink:0">${ICO.chevR}</span>
     </div>
-    <div class="flex items-center justify-around py-6 bg-[#111827] rounded-2xl border border-slate-700/30 min-h-[220px]">
-      ${opZone}<div class="font-display text-2xl text-yellow-400/50">VS</div>${myZone}
+    <div class="mcard" onclick="aSel('net')">
+      <div class="mico" style="background:#ff6ab022;color:var(--accent2)">${ICO.wifi}</div>
+      <div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:2px">連線對戰</div>
+        <div style="font-size:12px;color:var(--muted)">6位房間碼，P2P 零設定與朋友對戰</div>
+      </div>
+      <span style="color:var(--muted);margin-left:auto;flex-shrink:0">${ICO.chevR}</span>
     </div>
-    ${finHTML||`<div class="${mySt.ready||res?'opacity-50 pointer-events-none':''} mt-3">
-      <p class="text-center text-xs text-slate-500 mb-2 font-bold">${mySt.ready?'等待對手出牌...':'選擇出戰卡牌'}</p>
-      <div class="flex gap-2 justify-center overflow-x-auto no-sb py-2 px-1 min-h-[120px] items-end">${handHTML}</div>
-    </div>`}
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:8px">
+      <div style="font-size:11px;color:var(--muted);line-height:1.75;display:flex;align-items:flex-start;gap:6px">
+        <span style="color:var(--accent);flex-shrink:0;margin-top:1px">${ICO.info}</span>
+        <span>三局兩勝制。贏家可從對手<strong style="color:#fff">出戰牌</strong>隨機搶走一張！需選 4 張卡牌出戰。</span>
+      </div>
+    </div>
+  </div>`;
+}
+function aSel(mode){ S.ar._mode=mode; S.ar.deck=[]; S.ar.phase='deck'; renderDeck(); }
+
+// ── Deck select ──
+function renderDeck(){
+  const si=new Set(S.ar.deck.map(c=>c.id));
+  const slots=Array.from({length:4},(_,i)=>{
+    const c=S.ar.deck[i];
+    return `<div style="flex:1;min-width:0">${c
+      ? `<div class="cw" onclick="toggleDeck('${c.id}')" style="position:relative">${cardH(c)}
+           <div style="position:absolute;top:4px;right:4px;background:var(--danger);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center">${ICO.x}</div>
+         </div>`
+      : `<div class="dslot">${ICO.plus}</div>`
+    }</div>`;
+  }).join('');
+  aIn().innerHTML=`
+  <div style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:800;margin-bottom:8px">選擇牌組（${S.ar.deck.length}/4）</div>
+    <div style="display:flex;gap:7px">${slots}</div>
+  </div>
+  <div class="dvd"></div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:8px">點擊卡牌加入牌組（共 ${S.cards.length} 張）</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+    ${S.cards.map(c=>{
+      const sel=si.has(c.id);
+      return `<div class="cw" onclick="toggleDeck('${c.id}')" style="opacity:${sel?.38:1};${sel?'pointer-events:none':''}">${cardH(c)}</div>`;
+    }).join('')}
+  </div>
+  <button class="btn btnp" style="width:100%;font-size:15px" ${S.ar.deck.length!==4?'disabled':''} onclick="startBattle_${S.ar._mode}()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6 2 2-6 6z"/><path d="M3 21l4-4"/></svg>
+    出戰！
+  </button>`;
+}
+function toggleDeck(cid){
+  const idx=S.ar.deck.findIndex(c=>c.id===cid);
+  if(idx>=0) S.ar.deck.splice(idx,1);
+  else if(S.ar.deck.length<4){ const c=S.cards.find(c=>c.id===cid); if(c) S.ar.deck.push(c); }
+  renderDeck();
+}
+
+// ════════════════════════════════
+// AI BATTLE
+// ════════════════════════════════
+function startBattle_ai(){
+  const pool=[...S.cards].sort(()=>Math.random()-.5).slice(0,4);
+  S.ar.ai={hand:[...pool],used:new Set()};
+  S.ar.pl={hand:[...S.ar.deck],used:new Set()};
+  S.ar.round=1; S.ar.plW=0; S.ar.aiW=0; S.ar.rr=null; S.ar.phase='ai_battle';
+  renderAI();
+}
+
+function rrBlock(rr, myLabel, opLabel){
+  const pw=rr.plR>rr.opR, draw=rr.plR===rr.opR;
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:11px;text-align:center">
+    <div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:7px">ROUND ${rr.round} RESULT</div>
+    <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px">
+      <div style="flex:1;text-align:center">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${myLabel}</div>
+        <div style="width:68px;margin:0 auto">${cardH(rr.plC,true)}</div>
+        <div style="font-size:11px;font-weight:700;margin-top:3px;color:var(--danger)">−${rr.opDmg}</div>
+      </div>
+      <div style="font-size:18px;font-weight:900;color:var(--muted)">VS</div>
+      <div style="flex:1;text-align:center">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${opLabel}</div>
+        <div style="width:68px;margin:0 auto">${cardH(rr.opC||rr.aiC,true)}</div>
+        <div style="font-size:11px;font-weight:700;margin-top:3px;color:var(--danger)">−${rr.plDmg}</div>
+      </div>
+    </div>
+    <div style="font-weight:800;color:${draw?'#fbbf24':pw?'var(--ok)':'var(--danger)'}">
+      ${draw?'⚖️ 平局':pw?'✅ 你勝這局！':'❌ 對手勝這局'}
+    </div>
   </div>`;
 }
 
-window.playOnlineCard = async function(idx) {
-  if (!G.arena.matchId||!fbDb) return;
-  const isP1 = G.arena.matchData.player1===fbUser.uid;
-  const ref = doc(fbDb,'artifacts',fbAppId,'public','data','matches',G.arena.matchId);
-  if (isP1) await updateDoc(ref,{'p1State.currentCardIndex':idx,'p1State.ready':true});
-  else       await updateDoc(ref,{'p2State.currentCardIndex':idx,'p2State.ready':true});
-};
-window.handleOnlineWin = async function(c) { c.createdAt=Date.now(); await addCard(c); toast(`搶到 ${c.word}！`); leaveRoom(); };
-window.handleOnlineLose = async function(id) { await removeCard(id); toast('失去了一張卡牌...', true); leaveRoom(); };
-
-async function resolveOnlineRound(id, match) {
-  const ref = doc(fbDb,'artifacts',fbAppId,'public','data','matches',id);
-  await updateDoc(ref,{resolving:true});
-  const p1c=match.p1State.team[match.p1State.currentCardIndex], p2c=match.p2State.team[match.p2State.currentCardIndex];
-  const p1dmg=p1c.atk, p2dmg=p2c.atk, p1r=p1c.hp-p2dmg, p2r=p2c.hp-p1dmg;
-  let p1w=match.p1State.wins, p2w=match.p2State.wins;
-  if (p1r>p2r) p1w++; else if (p2r>p1r) p2w++;
-  const nextRound=match.round+1, done=p1w>=2||p2w>=2||nextRound>3;
-  setTimeout(async()=>{
-    await updateDoc(ref,{status:done?'finished':'playing',round:nextRound,resolving:false,
-      'p1State.wins':p1w,'p2State.wins':p2w,'p1State.ready':false,'p2State.ready':false,
-      'p1State.usedCards':[...match.p1State.usedCards,match.p1State.currentCardIndex],
-      'p2State.usedCards':[...match.p2State.usedCards,match.p2State.currentCardIndex],
-      'p1State.currentCardIndex':null,'p2State.currentCardIndex':null,
-      lastResult:{round:match.round,p1Card:p1c,p2Card:p2c,p1Dmg:p1dmg,p2Dmg:p2dmg}});
-  },3000);
+function scoreHUD(myW, opW, round){
+  return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:9px 14px;margin-bottom:11px;display:flex;justify-content:space-between;align-items:center">
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">你</div><div style="font-size:22px;font-weight:900;color:var(--ok)">${myW}</div></div>
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);letter-spacing:1px">ROUND</div><div style="font-size:18px;font-weight:900">${Math.min(round,3)}/3</div></div>
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">對手</div><div style="font-size:22px;font-weight:900;color:var(--danger)">${opW}</div></div>
+  </div>`;
 }
 
-// ── Keyboard ──────────────────────────────────────────────────
-document.addEventListener('keydown', e=>{
-  if (G.activeTab!=='hangman') return;
-  if (G.hm.status==='playing' && /^[a-zA-Z]$/.test(e.key)) guess(e.key.toUpperCase());
-  if ((G.hm.status==='won'||G.hm.status==='lost') && e.key==='Enter') initHangman();
+function gameOverBlock(iWon, myW, opW, stolen, btn1, btn2){
+  return `<div style="text-align:center;padding:28px 0 18px">
+    <div style="font-size:48px;margin-bottom:6px">${iWon?'🏆':'💀'}</div>
+    <div class="ko" style="font-size:28px;color:${iWon?'var(--ok)':'var(--danger)'}">${iWon?'VICTORY!':'DEFEATED'}</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:3px">${myW} : ${opW}</div>
+  </div>
+  ${iWon && stolen ? `<div style="background:var(--bg2);border:1px solid #facc1535;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px">
+    <div style="font-size:12px;color:#facc15;font-weight:700;margin-bottom:8px">🎉 搶到了對手的卡牌！</div>
+    <div style="width:110px;margin:0 auto" class="cdrop">${cardH(stolen)}</div>
+  </div>` : ''}
+  <button class="btn btnp" style="width:100%;margin-bottom:8px" onclick="${btn1}">${ICO.refresh} 繼續猜單字</button>
+  <button class="btn btns" style="width:100%" onclick="${btn2}">${ICO.back} 返回競技場</button>`;
+}
+
+function renderAI(){
+  const ar=S.ar, pw=ar.plW, aw=ar.aiW, r=ar.round;
+  if(pw>=2||aw>=2||r>3){
+    aIn().innerHTML = gameOverBlock(pw>aw, pw, aw, ar.rr?.stolen, "startHM();goTab('hangman')", "aBack()");
+    return;
+  }
+  const hH = ar.pl.hand.map((c,i)=>{
+    const u=ar.pl.used.has(i);
+    return `<div class="hcard ${u?'used':''}" onclick="if(!${u})playAI(${i})">${cardH(c,true)}</div>`;
+  }).join('');
+  aIn().innerHTML=`
+  ${scoreHUD(pw, aw, r)}
+  ${ar.rr ? rrBlock({...ar.rr, opC:ar.rr.aiC}, '你', 'AI') : ''}
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">選擇出戰卡牌（點擊出牌）</div>
+    <div class="hand-row">${hH}</div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">
+    ${ICO.info} ATK 互相攻擊，剩餘 HP 高的獲勝
+  </div>`;
+}
+
+function playAI(idx){
+  const ar=S.ar; if(ar.pl.used.has(idx)) return;
+  const plC=ar.pl.hand[idx];
+  const avail=[...ar.ai.hand.keys()].filter(i=>!ar.ai.used.has(i));
+  if(!avail.length) return;
+  const aiIdx=avail[~~(Math.random()*avail.length)];
+  const aiC=ar.ai.hand[aiIdx];
+  ar.pl.used.add(idx); ar.ai.used.add(aiIdx);
+  const plDmg=aiC.atk, opDmg=plC.atk;
+  const plR=plC.hp-plDmg, opR=aiC.hp-opDmg;
+  const pw=plR>opR, draw=plR===opR;
+  if(pw) ar.plW++; else if(!draw) ar.aiW++;
+  const rr={round:ar.round, plC, aiC, opC:aiC, plDmg, opDmg, plR, opR:opR, stolen:null};
+  ar.round++;
+  const over=ar.plW>=2||ar.aiW>=2||ar.round>4;
+  if(over && ar.plW>ar.aiW){
+    const s=ar.ai.hand[~~(Math.random()*ar.ai.hand.length)];
+    if(s){ const nc={...s,id:`stolen_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; }
+  }
+  ar.rr=rr; renderAI();
+}
+
+// ════════════════════════════════
+// NETWORK BATTLE (PeerJS)
+// ════════════════════════════════
+function startBattle_net(){ S.ar.phase='net_lobby'; renderNetLobby(); }
+
+function renderNetLobby(){
+  aIn().innerHTML=`
+  <div style="text-align:center;padding:12px 0 10px">
+    <div style="font-size:14px;font-weight:800;margin-bottom:3px">連線對戰</div>
+    <div style="font-size:11px;color:var(--muted)">PeerJS P2P · 零設定</div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--accent);display:flex;align-items:center;gap:5px">${ICO.door} 建立房間</div>
+    <button class="btn btnp" style="width:100%" id="btn-host" onclick="netHost()">建立並生成房間碼</button>
+    <div id="host-area" style="display:none;margin-top:12px;text-align:center">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">分享房間碼給朋友</div>
+      <div id="rcode-disp" class="rcode"></div>
+      <button onclick="copyCode()" class="btn btns" style="margin-top:7px;font-size:12px;padding:7px 12px">${ICO.copy} 複製</button>
+      <div id="host-st" style="font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px">
+        ${ICO.spin} 等待對手連線…
+      </div>
+    </div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px">
+    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--accent2);display:flex;align-items:center;gap:5px">${ICO.enter} 加入房間</div>
+    <input type="text" class="rinput" id="jin" placeholder="輸入房間碼" maxlength="6">
+    <button class="btn" style="width:100%;margin-top:9px;background:var(--accent2);color:#fff;font-size:14px" onclick="netJoin()">加入</button>
+    <div id="join-st" style="font-size:12px;color:var(--muted);text-align:center;margin-top:7px;min-height:16px"></div>
+  </div>`;
+}
+
+function copyCode(){ if(S.ar.roomCode) navigator.clipboard.writeText(S.ar.roomCode).then(()=>toast('已複製！','ok')); }
+
+function netHost(){
+  const btn=document.getElementById('btn-host');
+  btn.disabled=true; btn.innerHTML=`${ICO.spin} 建立中…`;
+  const code=Math.random().toString(36).substring(2,8).toUpperCase();
+  S.ar.roomCode=code; S.ar.isHost=true;
+  let peer;
+  try{ peer=new Peer(code); }catch(e){ peer=new Peer(); }
+  S.ar.peer=peer;
+  peer.on('open',()=>{
+    const ha=document.getElementById('host-area');
+    const rd=document.getElementById('rcode-disp');
+    if(ha) ha.style.display='block';
+    if(rd) rd.textContent=code;
+  });
+  peer.on('connection',conn=>{
+    S.ar.conn=conn; setupConn(conn);
+    const hs=document.getElementById('host-st');
+    if(hs) hs.innerHTML=`<span style="color:var(--ok)">${ICO.check} 對手已連線！</span>`;
+    setTimeout(()=>{ conn.send({type:'start',deck:S.ar.deck}); startNetBattle(); },400);
+  });
+  peer.on('error',e=>{ toast('建立房間失敗：'+e.type,'error'); });
+}
+
+function netJoin(){
+  const code=document.getElementById('jin').value.toUpperCase().trim();
+  if(code.length<4){ toast('請輸入正確房間碼','error'); return; }
+  const stEl=document.getElementById('join-st');
+  if(stEl) stEl.innerHTML=`<span style="display:flex;align-items:center;gap:5px;justify-content:center">${ICO.spin} 連線中…</span>`;
+  S.ar.roomCode=code; S.ar.isHost=false;
+  const peer=new Peer(); S.ar.peer=peer;
+  peer.on('open',()=>{
+    const conn=peer.connect(code); S.ar.conn=conn; setupConn(conn);
+    conn.on('open',()=>{
+      if(stEl) stEl.innerHTML=`<span style="color:var(--ok);display:flex;align-items:center;gap:5px;justify-content:center">${ICO.check} 已連線！</span>`;
+      conn.send({type:'start',deck:S.ar.deck});
+    });
+  });
+  peer.on('error',()=>{
+    if(stEl) stEl.innerHTML=`<span style="color:var(--danger)">無法連線，請確認房間碼</span>`;
+  });
+}
+
+function setupConn(conn){
+  conn.on('data', d=>handleNet(d));
+  conn.on('close',()=>{ toast('對手斷線','error'); S.ar.phase='mode'; renderAMode(); });
+}
+
+function handleNet(data){
+  if(data.type==='start'){
+    S.ar.no={hand:data.deck,used:new Set(),wins:0,sel:null,ready:false};
+    if(!S.ar.np.hand?.length) S.ar.np={hand:[...S.ar.deck],used:new Set(),wins:0,sel:null};
+    S.ar.netRound=1; S.ar.netRR=null; S.ar.phase='net_battle'; renderNet();
+  }
+  if(data.type==='play'){ S.ar.no.sel=data.idx; S.ar.no.ready=true; resolveNet(); }
+  if(data.type==='stolen'){ toast(`對手搶走了你的 ${data.word}！`,'error'); }
+}
+
+function startNetBattle(){
+  S.ar.np={hand:[...S.ar.deck],used:new Set(),wins:0,sel:null};
+  S.ar.no.wins=0; S.ar.no.used=new Set(); S.ar.no.ready=false; S.ar.no.sel=null;
+  S.ar.netRound=1; S.ar.netRR=null; S.ar.phase='net_battle'; renderNet();
+}
+
+function renderNet(){
+  const ar=S.ar, np=ar.np, no=ar.no, r=ar.netRound;
+  if(np.wins>=2||no.wins>=2||r>3){
+    aIn().innerHTML = gameOverBlock(np.wins>no.wins, np.wins, no.wins, ar.netRR?.stolen, "startHM();goTab('hangman')", "aBack()");
+    return;
+  }
+  const waitMsg = (np.sel!==null && !no.ready)
+    ? `<div style="text-align:center;font-size:12px;color:var(--muted);margin-top:7px;display:flex;align-items:center;justify-content:center;gap:5px">${ICO.spin} 等待對手出牌…</div>` : '';
+
+  const hH=np.hand.map((c,i)=>{
+    const u=np.used.has(i), sel=np.sel===i;
+    return `<div class="hcard ${u?'used':''} ${sel?'sel':''}" onclick="playNet(${i})">${cardH(c,true)}</div>`;
+  }).join('');
+
+  aIn().innerHTML=`
+  ${scoreHUD(np.wins, no.wins, r)}
+  ${ar.netRR ? rrBlock({...ar.netRR, opC:ar.netRR.opC}, '你', '對手') : ''}
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">
+      ${np.sel===null ? '選擇出戰卡牌（同時出牌制）' : `已選：${np.hand[np.sel]?.word}`}
+    </div>
+    <div class="hand-row">${hH}</div>
+    ${waitMsg}
+  </div>
+  <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">
+    ${ICO.wifi} 房間碼：<strong style="color:var(--accent2)">${S.ar.roomCode}</strong>
+  </div>`;
+}
+
+function playNet(idx){
+  const np=S.ar.np; if(np.used.has(idx)||np.sel!==null) return;
+  np.sel=idx; S.ar.conn?.send({type:'play',idx}); renderNet();
+  if(S.ar.no.ready) resolveNet();
+}
+
+function resolveNet(){
+  const ar=S.ar, np=ar.np, no=ar.no;
+  if(np.sel===null||!no.ready) return;
+  const plC=np.hand[np.sel], opC=no.hand[no.sel];
+  if(!plC||!opC) return;
+  const plDmg=opC.atk, opDmg=plC.atk;
+  const plR=plC.hp-plDmg, opR=opC.hp-opDmg;
+  const pw=plR>opR, draw=plR===opR;
+  np.used.add(np.sel); no.used.add(no.sel);
+  if(pw) np.wins++; else if(!draw) no.wins++;
+  const rr={round:ar.netRound, plC, opC, plDmg, opDmg, plR, opR, stolen:null};
+  ar.netRound++;
+  const pSel=np.sel; np.sel=null; no.ready=false; no.sel=null;
+  const over=np.wins>=2||no.wins>=2||ar.netRound>4;
+  if(over && np.wins>no.wins){
+    const pool=[...no.used].map(i=>no.hand[i]).filter(Boolean);
+    const st=(pool.length?pool:no.hand)[~~(Math.random()*(pool.length||no.hand.length))];
+    if(st){ const nc={...st,id:`ns_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; ar.conn?.send({type:'stolen',word:st.word}); }
+  }
+  if(over && no.wins>np.wins){
+    const lost=np.hand[pSel];
+    if(lost){ S.cards=S.cards.filter(c=>c.id!==lost.id); save(); updHdr(); }
+  }
+  ar.netRR=rr; renderNet();
+}
+
+// ════════════════════════════════
+// KEYBOARD
+// ════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(S.tab!=='hangman') return;
+  if(S.hm.status==='playing' && /^[a-zA-Z]$/.test(e.key)) guess(e.key.toUpperCase());
+  if((S.hm.status==='won'||S.hm.status==='lost') && e.key==='Enter') startHM();
 });
 
-// ── Bootstrap ─────────────────────────────────────────────────
-loadLocal(); updateUI();
-initFirebase();
-// 5秒後若未連線，確保單機也能正常啟動
-initHangman(); // 直接啟動，不等 Firebase
+// ════════════════════════════════
+// INIT
+// ════════════════════════════════
+// Inject shake animation
+const _st=document.createElement('style');
+_st.textContent='@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}';
+document.head.appendChild(_st);
+
+function init(){
+  load(); updHdr();
+  if(S.unlockedLib) document.getElementById('nb-library').classList.remove('lk');
+  if(S.cards.length>=4) document.getElementById('nb-arena').classList.remove('lk');
+  setTimeout(()=>{
+    const sp=document.getElementById('splash');
+    sp.style.opacity='0';
+    setTimeout(()=>sp.remove(), 400);
+  }, 500);
+  startHM();
+}
+init();
 </script>
 </body>
 </html>
