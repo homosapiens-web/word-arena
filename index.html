@@ -242,6 +242,8 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text
         flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin 1s linear infinite}
+@keyframes cardFlip{from{transform:rotateY(90deg) scale(.8);opacity:0}to{transform:none;opacity:1}}
+@keyframes dmgPop{0%{transform:scale(0) translateY(4px);opacity:0}60%{transform:scale(1.3) translateY(-2px)}100%{transform:none;opacity:1}}
 </style>
 </head>
 <body>
@@ -1439,48 +1441,57 @@ function toggleDeck(cid){
 // AI BATTLE
 // ════════════════════════════════
 function startBattle_ai(){
-  const pool=[...S.cards].sort(()=>Math.random()-.5).slice(0,4);
-  S.ar.ai={hand:[...pool],used:new Set()};
-  S.ar.pl={hand:[...S.ar.deck],used:new Set()};
-  S.ar.round=1; S.ar.plW=0; S.ar.aiW=0; S.ar.rr=null; S.ar.phase='ai_battle';
+  // AI picks from cards NOT in player's deck (no duplicates)
+  const deckIds = new Set(S.ar.deck.map(c=>c.id));
+  const pool = [...S.cards].filter(c=>!deckIds.has(c.id)).sort(()=>Math.random()-.5);
+  // If not enough unique cards, fill remainder randomly (shouldn't happen with 4+ cards)
+  let aiHand = pool.slice(0,4);
+  if(aiHand.length < 4){
+    const extra = [...S.cards].sort(()=>Math.random()-.5).slice(0, 4-aiHand.length);
+    aiHand = [...aiHand, ...extra];
+  }
+  S.ar.ai={hand:aiHand, used:new Set()};
+  S.ar.pl={hand:[...S.ar.deck], used:new Set()};
+  S.ar.round=1; S.ar.plW=0; S.ar.aiW=0; S.ar.rr=null;
+  S.ar.phase='ai_battle'; S.ar.animating=false;
   renderAI();
 }
 
 function rrBlock(rr, myLabel, opLabel){
   const pw=rr.plR>rr.opR, draw=rr.plR===rr.opR;
-  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:11px;margin-bottom:11px;text-align:center">
-    <div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:7px">ROUND ${rr.round} RESULT</div>
-    <div style="display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:8px">
+  return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:11px;text-align:center">
+    <div style="font-size:10px;font-weight:900;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ROUND ${rr.round} RESULT</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;justify-content:center;margin-bottom:12px">
       <div style="flex:1;text-align:center">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${myLabel}</div>
-        <div style="width:68px;margin:0 auto">${cardH(rr.plC,true)}</div>
-        <div style="font-size:11px;font-weight:700;margin-top:3px;color:var(--danger)">−${rr.opDmg}</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px">${myLabel}</div>
+        <div style="width:72px;margin:0 auto;animation:cardFlip .4s ease">${cardH(rr.plC,true)}</div>
+        <div style="font-size:13px;font-weight:900;margin-top:5px;color:var(--danger);animation:dmgPop .4s .3s both">−${rr.opDmg}</div>
       </div>
-      <div style="font-size:18px;font-weight:900;color:var(--muted)">VS</div>
+      <div style="font-size:20px;font-weight:900;color:var(--muted);padding-bottom:20px">VS</div>
       <div style="flex:1;text-align:center">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">${opLabel}</div>
-        <div style="width:68px;margin:0 auto">${cardH(rr.opC||rr.aiC,true)}</div>
-        <div style="font-size:11px;font-weight:700;margin-top:3px;color:var(--danger)">−${rr.plDmg}</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px">${opLabel}</div>
+        <div style="width:72px;margin:0 auto;animation:cardFlip .4s .15s ease both">${cardH(rr.opC||rr.aiC,true)}</div>
+        <div style="font-size:13px;font-weight:900;margin-top:5px;color:var(--danger);animation:dmgPop .4s .45s both">−${rr.plDmg}</div>
       </div>
     </div>
-    <div style="font-weight:800;color:${draw?'#fbbf24':pw?'var(--ok)':'var(--danger)'}">
+    <div style="font-weight:800;font-size:14px;padding:8px 16px;border-radius:8px;display:inline-block;background:${draw?'#fbbf2420':pw?'#00d68f20':'#ff4d6d20'};color:${draw?'#fbbf24':pw?'var(--ok)':'var(--danger)'}">
       ${draw?'⚖️ 平局':pw?'✅ 你勝這局！':'❌ 對手勝這局'}
     </div>
   </div>`;
 }
 
 function scoreHUD(myW, opW, round){
-  return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:9px 14px;margin-bottom:11px;display:flex;justify-content:space-between;align-items:center">
-    <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">你</div><div style="font-size:22px;font-weight:900;color:var(--ok)">${myW}</div></div>
-    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);letter-spacing:1px">ROUND</div><div style="font-size:18px;font-weight:900">${Math.min(round,3)}/3</div></div>
-    <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">對手</div><div style="font-size:22px;font-weight:900;color:var(--danger)">${opW}</div></div>
+  return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;margin-bottom:11px;display:flex;justify-content:space-between;align-items:center">
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">你</div><div style="font-size:26px;font-weight:900;color:var(--ok)">${myW}</div></div>
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:2px">ROUND</div><div style="font-size:20px;font-weight:900">${Math.min(round,3)}/3</div></div>
+    <div style="text-align:center"><div style="font-size:10px;color:var(--muted);margin-bottom:2px">對手</div><div style="font-size:26px;font-weight:900;color:var(--danger)">${opW}</div></div>
   </div>`;
 }
 
 function gameOverBlock(iWon, myW, opW, stolen, btn1, btn2){
   return `<div style="text-align:center;padding:28px 0 18px">
-    <div style="font-size:48px;margin-bottom:6px">${iWon?'🏆':'💀'}</div>
-    <div class="ko" style="font-size:28px;color:${iWon?'var(--ok)':'var(--danger)'}">${iWon?'VICTORY!':'DEFEATED'}</div>
+    <div style="font-size:52px;margin-bottom:6px">${iWon?'🏆':'💀'}</div>
+    <div class="ko" style="font-size:30px;color:${iWon?'var(--ok)':'var(--danger)'}">${iWon?'VICTORY!':'DEFEATED'}</div>
     <div style="font-size:13px;color:var(--muted);margin-top:3px">${myW} : ${opW}</div>
   </div>
   ${iWon && stolen ? `<div style="background:var(--bg2);border:1px solid #facc1535;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px">
@@ -1491,21 +1502,32 @@ function gameOverBlock(iWon, myW, opW, stolen, btn1, btn2){
   <button class="btn btns" style="width:100%" onclick="${btn2}">${ICO.back} 返回競技場</button>`;
 }
 
+// 卡牌背面 HTML（對手手牌用）
+function cardBack(){
+  return `<div class="ci" style="background:linear-gradient(135deg,#1a1a3e,#0f0f2a);border-color:#3a3a6a">
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;opacity:.4">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17" stroke-width="3"/></svg>
+    </div>
+    <div style="font-size:9px;color:#3a3a6a;text-align:center;font-weight:700;padding-bottom:4px">???</div>
+  </div>`;
+}
+
 function renderAI(){
   const ar=S.ar, pw=ar.plW, aw=ar.aiW, r=ar.round;
   if(pw>=2||aw>=2||r>3){
     aIn().innerHTML = gameOverBlock(pw>aw, pw, aw, ar.rr?.stolen, "startHM();goTab('hangman')", "aBack()");
     return;
   }
+  const isAnimating = ar.animating;
   const hH = ar.pl.hand.map((c,i)=>{
     const u=ar.pl.used.has(i);
-    return `<div class="hcard ${u?'used':''}" onclick="if(!${u})playAI(${i})">${cardH(c,true)}</div>`;
+    return `<div class="hcard ${u?'used':''}" onclick="if(!${u}&&!${isAnimating})playAI(${i})">${cardH(c,true)}</div>`;
   }).join('');
   aIn().innerHTML=`
   ${scoreHUD(pw, aw, r)}
   ${ar.rr ? rrBlock({...ar.rr, opC:ar.rr.aiC}, '你', 'AI') : ''}
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px">
-    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">選擇出戰卡牌（點擊出牌）</div>
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;${isAnimating?'opacity:.5;pointer-events:none':''}">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">${isAnimating?'交鋒中…':'選擇出戰卡牌（點擊出牌）'}</div>
     <div class="hand-row">${hH}</div>
   </div>
   <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">
@@ -1514,25 +1536,32 @@ function renderAI(){
 }
 
 function playAI(idx){
-  const ar=S.ar; if(ar.pl.used.has(idx)) return;
+  const ar=S.ar; if(ar.pl.used.has(idx)||ar.animating) return;
   const plC=ar.pl.hand[idx];
   const avail=[...ar.ai.hand.keys()].filter(i=>!ar.ai.used.has(i));
   if(!avail.length) return;
   const aiIdx=avail[~~(Math.random()*avail.length)];
   const aiC=ar.ai.hand[aiIdx];
   ar.pl.used.add(idx); ar.ai.used.add(aiIdx);
-  const plDmg=aiC.atk, opDmg=plC.atk;
-  const plR=plC.hp-plDmg, opR=aiC.hp-opDmg;
-  const pw=plR>opR, draw=plR===opR;
-  if(pw) ar.plW++; else if(!draw) ar.aiW++;
-  const rr={round:ar.round, plC, aiC, opC:aiC, plDmg, opDmg, plR, opR:opR, stolen:null};
-  ar.round++;
-  const over=ar.plW>=2||ar.aiW>=2||ar.round>4;
-  if(over && ar.plW>ar.aiW){
-    const s=ar.ai.hand[~~(Math.random()*ar.ai.hand.length)];
-    if(s){ const nc={...s,id:`stolen_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; }
-  }
-  ar.rr=rr; renderAI();
+  ar.animating=true; renderAI(); // show locked state
+
+  setTimeout(()=>{
+    const plDmg=aiC.atk, opDmg=plC.atk;
+    const plR=plC.hp-plDmg, opR=aiC.hp-opDmg;
+    const pw=plR>opR, draw=plR===opR;
+    if(pw) ar.plW++; else if(!draw) ar.aiW++;
+    const rr={round:ar.round, plC, aiC, opC:aiC, plDmg, opDmg, plR, opR, stolen:null};
+    ar.round++; ar.animating=false;
+    const over=ar.plW>=2||ar.aiW>=2||ar.round>4;
+    if(over && ar.plW>ar.aiW){
+      // Steal from AI's unused cards only
+      const unused=[...ar.ai.hand.keys()].filter(i=>!ar.ai.used.has(i));
+      const pool=unused.length?unused.map(i=>ar.ai.hand[i]):ar.ai.hand;
+      const s=pool[~~(Math.random()*pool.length)];
+      if(s){ const nc={...s,id:`stolen_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; }
+    }
+    ar.rr=rr; renderAI();
+  }, 900); // 0.9s delay for animation
 }
 
 // ════════════════════════════════
@@ -1585,8 +1614,10 @@ function netHost(){
   peer.on('connection',conn=>{
     S.ar.conn=conn; setupConn(conn);
     const hs=document.getElementById('host-st');
-    if(hs) hs.innerHTML=`<span style="color:var(--ok)">${ICO.check} 對手已連線！</span>`;
-    setTimeout(()=>{ conn.send({type:'start',deck:S.ar.deck}); startNetBattle(); },400);
+    if(hs) hs.innerHTML=`<span style="color:var(--ok)">${ICO.check} 對手已連線，等待牌組交換…</span>`;
+    // Host sends deck — waits for opponent's deck via handleNet('start') before starting
+    setTimeout(()=>{ conn.send({type:'start',deck:S.ar.deck}); },300);
+    // Host will start battle when it receives opponent's 'start' message (in handleNet)
   });
   peer.on('error',e=>{ toast('建立房間失敗：'+e.type,'error'); });
 }
@@ -1601,7 +1632,7 @@ function netJoin(){
   peer.on('open',()=>{
     const conn=peer.connect(code); S.ar.conn=conn; setupConn(conn);
     conn.on('open',()=>{
-      if(stEl) stEl.innerHTML=`<span style="color:var(--ok);display:flex;align-items:center;gap:5px;justify-content:center">${ICO.check} 已連線！</span>`;
+      if(stEl) stEl.innerHTML=`<span style="color:var(--ok);display:flex;align-items:center;gap:5px;justify-content:center">${ICO.check} 已連線，交換牌組中…</span>`;
       conn.send({type:'start',deck:S.ar.deck});
     });
   });
@@ -1617,18 +1648,19 @@ function setupConn(conn){
 
 function handleNet(data){
   if(data.type==='start'){
-    S.ar.no={hand:data.deck,used:new Set(),wins:0,sel:null,ready:false};
-    if(!S.ar.np.hand?.length) S.ar.np={hand:[...S.ar.deck],used:new Set(),wins:0,sel:null};
-    S.ar.netRound=1; S.ar.netRR=null; S.ar.phase='net_battle'; renderNet();
+    // Both sides receive each other's deck via this message, then start
+    S.ar.no={hand:data.deck, used:new Set(), wins:0, sel:null, ready:false};
+    S.ar.np={hand:[...S.ar.deck], used:new Set(), wins:0, sel:null};
+    S.ar.netRound=1; S.ar.netRR=null; S.ar.netAnimating=false;
+    S.ar.phase='net_battle';
+    renderNet();
   }
-  if(data.type==='play'){ S.ar.no.sel=data.idx; S.ar.no.ready=true; resolveNet(); }
+  if(data.type==='play'){
+    S.ar.no.sel=data.idx; S.ar.no.ready=true;
+    if(S.ar.np.sel!==null) resolveNet(); // both played, resolve now
+    else renderNet(); // just show opponent is ready
+  }
   if(data.type==='stolen'){ toast(`對手搶走了你的 ${data.word}！`,'error'); }
-}
-
-function startNetBattle(){
-  S.ar.np={hand:[...S.ar.deck],used:new Set(),wins:0,sel:null};
-  S.ar.no.wins=0; S.ar.no.used=new Set(); S.ar.no.ready=false; S.ar.no.sel=null;
-  S.ar.netRound=1; S.ar.netRR=null; S.ar.phase='net_battle'; renderNet();
 }
 
 function renderNet(){
@@ -1637,59 +1669,93 @@ function renderNet(){
     aIn().innerHTML = gameOverBlock(np.wins>no.wins, np.wins, no.wins, ar.netRR?.stolen, "startHM();goTab('hangman')", "aBack()");
     return;
   }
-  const waitMsg = (np.sel!==null && !no.ready)
-    ? `<div style="text-align:center;font-size:12px;color:var(--muted);margin-top:7px;display:flex;align-items:center;justify-content:center;gap:5px">${ICO.spin} 等待對手出牌…</div>` : '';
+  const isAnim = ar.netAnimating;
+  const opReady = no.ready; // opponent has played
 
-  const hH=np.hand.map((c,i)=>{
+  // My hand — show cards face-up, used ones greyed
+  const myHandH = np.hand.map((c,i)=>{
     const u=np.used.has(i), sel=np.sel===i;
     return `<div class="hcard ${u?'used':''} ${sel?'sel':''}" onclick="playNet(${i})">${cardH(c,true)}</div>`;
   }).join('');
 
+  // Opponent's hand — always face-down (backside), used ones gone
+  const opHandH = no.hand.map((_,i)=>{
+    if(no.used.has(i)) return ''; // used cards disappear
+    const isSelected = no.sel===i && isAnim; // only reveal during resolve
+    return `<div class="hcard" style="cursor:default">${isSelected ? cardH(no.hand[i],true) : cardBack()}</div>`;
+  }).join('');
+
+  const statusMsg = isAnim
+    ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 0">${ICO.spin} 交鋒中…</div>`
+    : np.sel!==null && !opReady
+    ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--muted);padding:6px 0">${ICO.spin} 等待對手出牌…</div>`
+    : opReady && np.sel===null
+    ? `<div style="font-size:12px;color:#fbbf24;font-weight:700;text-align:center;padding:6px 0">對手已出牌，請選擇你的卡牌！</div>`
+    : '';
+
   aIn().innerHTML=`
   ${scoreHUD(np.wins, no.wins, r)}
-  ${ar.netRR ? rrBlock({...ar.netRR, opC:ar.netRR.opC}, '你', '對手') : ''}
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px">
-    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">
-      ${np.sel===null ? '選擇出戰卡牌（同時出牌制）' : `已選：${np.hand[np.sel]?.word}`}
+  ${ar.netRR ? rrBlock({...ar.netRR}, '你', '對手') : ''}
+
+  <!-- Opponent hand (face down) -->
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:5px">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      對手手牌 ${opReady ? '<span style="color:#fbbf24;font-size:10px">（已出牌）</span>' : ''}
     </div>
-    <div class="hand-row">${hH}</div>
-    ${waitMsg}
+    <div class="hand-row" style="opacity:${isAnim?.6:1}">${opHandH}</div>
   </div>
-  <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">
+
+  <!-- My hand -->
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;${isAnim?'opacity:.5;pointer-events:none':''}">
+    <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">
+      ${np.sel===null ? '選擇出戰卡牌' : `已選：${np.hand[np.sel]?.word}`}
+    </div>
+    <div class="hand-row">${myHandH}</div>
+  </div>
+
+  ${statusMsg}
+  <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px">
     ${ICO.wifi} 房間碼：<strong style="color:var(--accent2)">${S.ar.roomCode}</strong>
   </div>`;
 }
 
 function playNet(idx){
-  const np=S.ar.np; if(np.used.has(idx)||np.sel!==null) return;
-  np.sel=idx; S.ar.conn?.send({type:'play',idx}); renderNet();
+  const np=S.ar.np; if(np.used.has(idx)||np.sel!==null||S.ar.netAnimating) return;
+  np.sel=idx;
+  S.ar.conn?.send({type:'play',idx});
   if(S.ar.no.ready) resolveNet();
+  else renderNet();
 }
 
 function resolveNet(){
   const ar=S.ar, np=ar.np, no=ar.no;
-  if(np.sel===null||!no.ready) return;
-  const plC=np.hand[np.sel], opC=no.hand[no.sel];
-  if(!plC||!opC) return;
-  const plDmg=opC.atk, opDmg=plC.atk;
-  const plR=plC.hp-plDmg, opR=opC.hp-opDmg;
-  const pw=plR>opR, draw=plR===opR;
-  np.used.add(np.sel); no.used.add(no.sel);
-  if(pw) np.wins++; else if(!draw) no.wins++;
-  const rr={round:ar.netRound, plC, opC, plDmg, opDmg, plR, opR, stolen:null};
-  ar.netRound++;
-  const pSel=np.sel; np.sel=null; no.ready=false; no.sel=null;
-  const over=np.wins>=2||no.wins>=2||ar.netRound>4;
-  if(over && np.wins>no.wins){
-    const pool=[...no.used].map(i=>no.hand[i]).filter(Boolean);
-    const st=(pool.length?pool:no.hand)[~~(Math.random()*(pool.length||no.hand.length))];
-    if(st){ const nc={...st,id:`ns_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; ar.conn?.send({type:'stolen',word:st.word}); }
-  }
-  if(over && no.wins>np.wins){
-    const lost=np.hand[pSel];
-    if(lost){ S.cards=S.cards.filter(c=>c.id!==lost.id); save(); updHdr(); }
-  }
-  ar.netRR=rr; renderNet();
+  if(np.sel===null||!no.ready||ar.netAnimating) return;
+  ar.netAnimating=true; renderNet();
+
+  setTimeout(()=>{
+    const plC=np.hand[np.sel], opC=no.hand[no.sel];
+    if(!plC||!opC){ ar.netAnimating=false; return; }
+    const plDmg=opC.atk, opDmg=plC.atk;
+    const plR=plC.hp-plDmg, opR=opC.hp-opDmg;
+    const pw=plR>opR, draw=plR===opR;
+    np.used.add(np.sel); no.used.add(no.sel);
+    if(pw) np.wins++; else if(!draw) no.wins++;
+    const rr={round:ar.netRound, plC, opC, plDmg, opDmg, plR, opR, stolen:null};
+    ar.netRound++;
+    const pSel=np.sel; np.sel=null; no.ready=false; no.sel=null; ar.netAnimating=false;
+    const over=np.wins>=2||no.wins>=2||ar.netRound>4;
+    if(over && np.wins>no.wins){
+      const pool=[...no.used].map(i=>no.hand[i]).filter(Boolean);
+      const st=(pool.length?pool:no.hand)[~~(Math.random()*(pool.length||no.hand.length))];
+      if(st){ const nc={...st,id:`ns_${Date.now()}`,createdAt:Date.now(),isNew:true}; S.cards.unshift(nc); save(); updHdr(); rr.stolen=nc; ar.conn?.send({type:'stolen',word:st.word}); }
+    }
+    if(over && no.wins>np.wins){
+      const lost=np.hand[pSel];
+      if(lost){ S.cards=S.cards.filter(c=>c.id!==lost.id); save(); updHdr(); }
+    }
+    ar.netRR=rr; renderNet();
+  }, 900);
 }
 
 // ════════════════════════════════
