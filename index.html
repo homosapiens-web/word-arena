@@ -73,45 +73,68 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text
 .s6{--cg:#facc1565;border-color:#facc1578!important;box-shadow:0 0 20px #facc1518}
 
 #hm-inner{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:clamp(10px,2vh,28px) clamp(12px,3vw,40px) clamp(10px,2vh,20px);
-  overflow-y:auto;flex:1;gap:clamp(8px,1.8vh,20px);
+  display:flex;flex-direction:column;align-items:center;
+  padding:clamp(10px,2vh,24px) clamp(12px,4vw,48px) 16px;
+  overflow-y:auto;flex:1;gap:clamp(8px,1.5vh,16px);
 }
 #hm-status{
-  font-size:clamp(11px,1.6vw,16px);color:var(--muted);
-  letter-spacing:1px;font-weight:700;min-height:16px;
-  align-self:center;
+  font-size:clamp(12px,1.8vw,16px);
+  color:var(--muted);letter-spacing:1px;font-weight:700;
 }
-#wdisp{display:flex;gap:clamp(4px,0.9vw,12px);flex-wrap:wrap;justify-content:center}
+/* 單一置中欄，所有內容在這裡堆疊 */
+#hm-center{
+  display:flex;flex-direction:column;align-items:center;
+  gap:clamp(8px,1.5vh,18px);
+  width:100%;max-width:min(640px,96vw);
+}
+/* hm-left/right 變成透明 passthrough */
+#hm-left,#hm-right{
+  display:contents;
+}
+/* 絞刑台 */
+#gallows{
+  display:flex;align-items:center;justify-content:center;
+  width:clamp(140px,30vw,300px);
+}
+#gallows svg{
+  width:100%!important;height:auto!important;
+}
+/* 字母格 */
+#wdisp{
+  display:flex;gap:clamp(5px,1.2vw,14px);
+  flex-wrap:wrap;justify-content:center;width:100%;
+}
 .lslot{
-  width:clamp(28px,4.2vw,58px);
-  height:clamp(36px,5.5vw,70px);
-  border-bottom:3px solid var(--muted);
+  width:clamp(30px,5vw,62px);
+  height:clamp(38px,6.5vw,78px);
+  border-bottom:clamp(2px,.35vw,4px) solid var(--muted);
   display:flex;align-items:flex-end;justify-content:center;
-  padding-bottom:clamp(2px,.4vw,6px);
+  padding-bottom:clamp(2px,.5vw,7px);
   font-family:'Black Han Sans',sans-serif;
-  font-size:clamp(16px,3vw,38px);
+  font-size:clamp(17px,3.5vw,44px);
   color:#fff;transition:border-color .2s;
 }
 .lslot.rev{border-color:var(--accent)}
+/* 鍵盤 — 7欄 grid 撐滿 hm-center 欄寬 */
 #kb{
   display:grid;
   grid-template-columns:repeat(7,1fr);
-  gap:clamp(4px,.7vw,9px);
+  gap:clamp(5px,.9vw,10px);
   width:100%;
 }
 .key{
   aspect-ratio:1;
-  border-radius:clamp(6px,1vw,12px);
-  border:1px solid var(--border);background:var(--bg3);color:var(--text);
+  border-radius:clamp(6px,1vw,14px);
+  border:1px solid var(--border);
+  background:var(--bg3);color:var(--text);
   font-family:'Black Han Sans',sans-serif;
-  font-size:clamp(12px,2vw,22px);
+  font-size:clamp(13px,2.2vw,26px);
   cursor:pointer;transition:all .15s;
   display:flex;align-items:center;justify-content:center;padding:0;
 }
 .key:active{transform:scale(.88)}
 .key.hit{background:var(--accent);border-color:var(--accent);color:#fff}
-.key.miss{background:var(--bg2);border-color:#222233;color:var(--muted);cursor:default;opacity:.45}
+.key.miss{background:var(--bg2);border-color:#222233;color:var(--muted);cursor:default;opacity:.4}
 
 /* ── result overlay ── */
 #roverlay{
@@ -219,39 +242,6 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text
         flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin 1s linear infinite}
-
-/* ── large screen: side-by-side gallows + word ── */
-@media(min-width:700px){
-  #hm-inner{ justify-content:center; }
-  #hm-center{
-    flex-direction:row; align-items:center; flex-wrap:nowrap;
-    justify-content:center; gap:clamp(24px,5vw,72px);
-    width:100%; max-width:min(960px,96vw);
-  }
-  #hm-left{
-    display:flex; flex-direction:column; align-items:center; gap:12px;
-    flex-shrink:0;
-    width:clamp(180px,28vw,340px);
-  }
-  #hm-right{
-    flex:1; min-width:240px; max-width:520px;
-    display:flex; flex-direction:column; align-items:center; gap:clamp(10px,2vh,18px);
-  }
-  #gallows svg{ width:100%!important; height:auto!important; }
-}
-@media(max-width:699px){
-  #hm-center{
-    display:flex; flex-direction:column; align-items:center;
-    gap:clamp(8px,1.8vh,18px); width:100%; max-width:min(420px,96vw);
-  }
-  #hm-left{
-    display:flex; flex-direction:column; align-items:center; gap:10px; width:100%;
-  }
-  #hm-right{
-    display:flex; flex-direction:column; align-items:center; gap:10px; width:100%;
-  }
-  #gallows svg{ width:clamp(130px,45vw,220px)!important; height:auto!important; }
-}
 </style>
 </head>
 <body>
