@@ -6,7 +6,7 @@
 <title>單字大亂鬥 · Word Arena</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- PeerJS 延遲載入，不阻塞頁面 -->
 <style>
 :root{
   --bg:#09090f;--bg2:#11111d;--bg3:#1a1a2e;
@@ -150,11 +150,16 @@ body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text
   flex:1;overflow-y:auto;
   padding:clamp(8px,1.5vw,16px);
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(clamp(100px,18vw,160px),1fr));
-  gap:clamp(7px,1.5vw,14px);
+  grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+  gap:clamp(8px,1.5vw,14px);
   align-content:start;
 }
-.cw{aspect-ratio:3/4;border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .2s}
+.cw{
+  aspect-ratio:3/4;border-radius:14px;overflow:hidden;
+  cursor:pointer;transition:transform .2s;
+  /* 確保每個卡片格子獨立，不因 position:relative 的子元素溢出 */
+  contain:layout;
+}
 .cw:hover{transform:translateY(-4px)}
 
 /* ── modal ── */
@@ -372,7 +377,11 @@ const ICO = {
 // ════════════════════════════════
 const S = {
   cards:[], unlockedLib:false, tab:'hangman',
-  hm:{ status:'idle', word:'', guessed:new Set(), mistakes:0, maxMistakes:6, errors:0, details:null, newCard:null },
+  hm:{ status:'idle', word:'', guessed:new Set(), mistakes:0, maxMistakes:6, errors:0, details:null, newCard:null,
+       hint:null,          // { category, revealed_letter, letterIdx }
+       hintPenalty:0,      // 累積扣減 0..1
+       hintUsed:{ cat:false, letters:[] }  // 已用過的提示
+  },
   ar:{
     phase:'mode', deck:[], _mode:'ai',
     ai:{hand:[],used:new Set()}, pl:{hand:[],used:new Set()},
@@ -420,36 +429,148 @@ function cCol(c){ return {A1:'#94a3b8',A2:'#4ade80',B1:'#60a5fa',B2:'#a78bfa',C1
 function cBg(c){  return {A1:'#94a3b810',A2:'#4ade8015',B1:'#60a5fa15',B2:'#a78bfa18',C1:'#fb923c18',C2:'#facc1520'}[c]||'#6b6b9a10'; }
 function estCEFR(w){
   const l=w.length;
-  return l<=3?'A1':l===4?'A1':l===5?'A2':l===6?'B1':l===7?'B2':l===8?'C1':'C2';
+  // 字長 → 保守估算，不亂給 C2，最多 C1
+  return l<=4?'A1':l===5?'A2':l===6?'B1':l<=8?'B2':l<=10?'C1':'C1';
 }
 
+// 補充常見漏網字（讓 Oxford/Cambridge 爬不到時也有正確分級）
+const EXTRA_CEFR = {
+  shelter:'B1', rescue:'B1', balance:'B1', current:'B1', witness:'B1',
+  harvest:'B1', ancient:'B1', courage:'B1', freedom:'B1', mystery:'B1',
+  justice:'B1', pattern:'B1', surface:'B1', mission:'B1', chapter:'B1',
+  captain:'B1', servant:'B1', hunting:'B1', scoring:'B1', writing:'B1',
+  morning:'A1', evening:'A2', weekend:'A2', kitchen:'A1', chicken:'A1',
+  western:'B1', eastern:'B1', central:'B1', plastic:'B1', leather:'B1',
+  digital:'B1', natural:'A2', logical:'B1', magical:'B1', typical:'B1',
+  violent:'B1', ancient:'B1', distant:'B1', instant:'B1', patient:'B1',
+  content:'B1', context:'B2', contract:'B2', concept:'B2', conduct:'B2',
+  confirm:'B1', connect:'B1', contain:'B1', control:'B1', convert:'B1',
+  deliver:'B1', destroy:'B1', develop:'B1', discuss:'B1', display:'B1',
+  examine:'B1', explain:'B1', explore:'B1', express:'B1', forward:'B1',
+  mention:'B1', network:'B1', observe:'B1', perform:'B1', prevent:'B1',
+  produce:'B1', protect:'B1', publish:'B1', qualify:'B1', recover:'B1',
+  reflect:'B1', release:'B1', replace:'B1', request:'B1', respond:'B1',
+  attempt:'B1', support:'B1', survive:'B1', sustain:'B2', acquire:'B2',
+  achieve:'B1', analyse:'B2', arrange:'B1', attract:'B1', compare:'B1',
+  compete:'B1', complete:'B1', confirm:'B1', consider:'B1', contain:'B1',
+  contribute:'B2', demonstrate:'B2', establish:'B2', evaluate:'B2',
+  highlight:'B1', identify:'B2', indicate:'B2', maintain:'B2', maximize:'B2',
+  organize:'B1', overcome:'B1', persuade:'B2', prepare:'B1', recognize:'B1',
+};
+// 動態合入主表（啟動時一次性）
+Object.assign(CEFR_DB, EXTRA_CEFR);
+
 // ════════════════════════════════
-// WORD SOURCE (wide range)
+// WORD SOURCE — 累積擴展難度
 // ════════════════════════════════
-const TOPICS=['animal','technology','science','space','ocean','history','medicine','music','food','sports','geography','art','nature','architecture','philosophy','psychology','law','biology','chemistry','weather'];
+const TOPICS = ['animal','technology','science','space','ocean','history','medicine',
+  'music','food','sports','geography','art','nature','architecture','philosophy',
+  'psychology','law','biology','chemistry','weather','literature','economy','politics'];
+
+// 難度曲線：低字長永遠佔 40%+ 基礎份額，高字長緩慢增加
+// t = 0(0張) → 1(50張滿)，更長的爬升斜率讓後期不那麼殘暴
+function calcLengthWeights(){
+  const n = S.cards.length;
+  const t = Math.min(1, n / 50); // 改為 50 張才到頂，斜率更緩
+
+  // [字長, 基礎權重(永遠存在), 隨t增加的額外]
+  // 字長 4+5 合計基礎 42%，永遠不消失
+  const spec = [
+    [4,  22,  0 ],
+    [5,  20,  0 ],
+    [6,  16,  3 ],
+    [7,  11,  8 ],
+    [8,   6, 12 ],
+    [9,   3, 10 ],
+    [10,  1,  7 ],
+    [11,  1,  4 ],
+  ];
+
+  return spec.map(([l, base, bonus]) => ({ l, w: base + bonus * t }));
+}
+
+function pickWeightedLength(){
+  const weights = calcLengthWeights();
+  const total = weights.reduce((s,x)=>s+x.w, 0);
+  let r = Math.random() * total;
+  for(const {l,w} of weights){ r-=w; if(r<=0) return l; }
+  return weights[weights.length-1].l;
+}
+
+// 已收集單字集合（全小寫，去除複數s/ed/ing等變形可能造成的漏網）
+function getOwnedWords(){
+  const set = new Set();
+  S.cards.forEach(c=>{
+    const w = (c.wordLower || c.word || '').toLowerCase().trim();
+    if(w) set.add(w);
+    // 也加入去掉尾部s的形式，防止 sciences/science 都出現
+    if(w.endsWith('s') && w.length > 4) set.add(w.slice(0,-1));
+    if(w.endsWith('es') && w.length > 5) set.add(w.slice(0,-2));
+    if(w.endsWith('ing') && w.length > 6) set.add(w.slice(0,-3));
+    if(w.endsWith('ed') && w.length > 5) set.add(w.slice(0,-2));
+  });
+  return set;
+}
 
 async function getRandWord(){
-  // 60% topic-based (datamuse) — varied, domain-rich
-  if(Math.random() < 0.6){
+  const targetLen = pickWeightedLength();
+  const owned = getOwnedWords();
+
+  // 並行抓取，用較短的 timeout 避免卡住
+  const datamuse = (async()=>{
     try{
       const t = TOPICS[~~(Math.random()*TOPICS.length)];
       const mode = Math.random()<.5 ? 'ml' : 'rel_trg';
-      const r = await fetch(`https://api.datamuse.com/words?${mode}=${t}&max=120`, {signal:AbortSignal.timeout(5000)});
+      const r = await fetch(
+        `https://api.datamuse.com/words?${mode}=${t}&max=200`,
+        {signal:AbortSignal.timeout(3000)}  // 縮短到 3 秒
+      );
       const d = await r.json();
-      const pool = d.filter(x => /^[a-z]+$/.test(x.word) && x.word.length>=4 && x.word.length<=11);
-      if(pool.length) return pool[~~(Math.random()*Math.min(pool.length,80))].word;
-    }catch(e){}
-  }
-  // 40% random-word-api
+      const exact = d.filter(x => /^[a-z]+$/.test(x.word) && x.word.length===targetLen && !owned.has(x.word));
+      const near  = d.filter(x => /^[a-z]+$/.test(x.word) && Math.abs(x.word.length-targetLen)<=1 && x.word.length>=4 && x.word.length<=11 && !owned.has(x.word));
+      const pool = exact.length ? exact : near;
+      return pool.length ? pool[~~(Math.random()*Math.min(pool.length,60))].word : null;
+    }catch(e){ return null; }
+  })();
+
+  const randapi = (async()=>{
+    try{
+      const r = await fetch(
+        `https://random-word-api.herokuapp.com/word?length=${targetLen}`,
+        {signal:AbortSignal.timeout(3000)}  // 縮短到 3 秒
+      );
+      const d = await r.json();
+      return (d?.[0] && !owned.has(d[0])) ? d[0] : null;
+    }catch(e){ return null; }
+  })();
+
+  // 用 Promise.race 取最快回來的結果，同時跑兩個
+  // 但還是希望 datamuse 優先，給它多 500ms 優勢
+  let winner = null;
   try{
-    const len = ~~(Math.random()*7)+4;
-    const r = await fetch(`https://random-word-api.herokuapp.com/word?length=${len}`, {signal:AbortSignal.timeout(5000)});
-    const d = await r.json();
-    if(d?.[0]) return d[0];
+    winner = await Promise.race([
+      datamuse,
+      new Promise(res => setTimeout(async()=>res(await randapi), 500))
+    ]);
   }catch(e){}
-  // local fallback pool
-  const fb=['serendipity','metamorphosis','ephemeral','labyrinth','zenith','catalyst','enigma','quantum','palimpsest','soliloquy','melancholy','wanderlust','gossamer','sycophant','ineffable','sonder','hiraeth','lacuna','petrichor','susurrus'];
-  return fb[~~(Math.random()*fb.length)];
+
+  // 若兩個都回來了取第一個非空的
+  if(!winner){
+    const results = await Promise.allSettled([datamuse, randapi]);
+    winner = results.find(r=>r.status==='fulfilled'&&r.value)?.value || null;
+  }
+
+  if(winner && !owned.has(winner)) return winner;
+
+  // 本地 fallback（即時，不需要網路）
+  const allFallbacks = [
+    'fish','lake','farm','city','bird','rain','moon','wind','book','fold','myth','lamp','frog','drum',
+    'brave','storm','flame','proud','crown','frost','magic','night','globe','swift','grace','pearl',
+    'science','freedom','courage','ancient','mystery','harvest','witness','shelter','current','balance',
+    'ephemeral','labyrinth','melancholy','wanderlust','serendipity','eloquence','soliloquy','resilience',
+  ];
+  const fresh = allFallbacks.filter(w=>!owned.has(w));
+  return fresh.length ? fresh[~~(Math.random()*fresh.length)] : allFallbacks[~~(Math.random()*allFallbacks.length)];
 }
 
 // ════════════════════════════════
@@ -511,8 +632,57 @@ const CEFR_DB = {
   tree:'A1',two:'A1',up:'A1',us:'A1',very:'A1',walk:'A1',want:'A1',water:'A1',we:'A1',
   week:'A1',what:'A1',when:'A1',where:'A1',which:'A1',white:'A1',who:'A1',with:'A1',
   woman:'A1',word:'A1',write:'A1',year:'A1',yes:'A1',you:'A1',young:'A1',your:'A1',
-  // A2
-  accept:'A2',accident:'A2',activity:'A2',address:'A2',afraid:'A2',airport:'A2',angry:'A2',
+  // 動物
+  tiger:'A2',  lion:'A2',   bear:'A2',   wolf:'A2',   deer:'A2',   duck:'A1',
+  frog:'A2',   snake:'A2',  horse:'A1',  sheep:'A1',  goat:'A2',   pig:'A1',
+  cow:'A1',    hen:'A1',    fox:'A2',    owl:'A2',    bat:'A2',    bee:'A1',
+  ant:'A1',    fly:'A1',    bug:'A1',    elephant:'A2',monkey:'A2',rabbit:'A1',
+  mouse:'A1',  rat:'A2',    whale:'A2',  shark:'A2',  eagle:'A2',  parrot:'A2',
+  turtle:'A2', lizard:'B1', leopard:'B1',dolphin:'B1',penguin:'B1',gorilla:'B1',
+  crocodile:'B1',giraffe:'B1',flamingo:'B1',cheetah:'B1',
+  thunder:'B1', ocean:'A2',  journey:'A2', mirror:'A2', forest:'A1', garden:'A1',
+  winter:'A1',  summer:'A1', spring:'A1',  autumn:'A2', morning:'A1',evening:'A1',
+  window:'A1',  button:'A1', finger:'A1',  garden:'A1', market:'A2', castle:'B1',
+  bridge:'A2',  island:'A2', valley:'B1',  desert:'B1', jungle:'B1', planet:'A2',
+  rocket:'B1',  robot:'B1',  energy:'B1',  matter:'B1', signal:'B1', engine:'B1',
+  bottle:'A1',  candle:'A2', carpet:'A2',  curtain:'B1',kitchen:'A1',bedroom:'A1',
+  village:'A2', city:'A1',   capital:'B1', airport:'A2',station:'A2',factory:'B1',
+  soldier:'B1', captain:'B1',monster:'B1', dragon:'B1', wizard:'B1', knight:'B1',
+  silver:'A2',  golden:'A2', purple:'A1',  orange:'A1', yellow:'A1', copper:'B1',
+  danger:'B1',  rescue:'B1', battle:'B1',  attack:'B1', defend:'B1', escape:'B1',
+  mystery:'B1', secret:'A2', treasure:'B1',adventure:'B1',fortune:'B1',legend:'B1',
+  ancient:'B1', modern:'B1', future:'A2',  century:'B1',history:'A2',culture:'B1',
+  weather:'A2', climate:'B1',thunder:'B1', lightning:'B1',rainbow:'A2',
+  mountain:'A1',river:'A1',  flower:'A1',  stone:'A1',  cloud:'A1',  sunset:'A2',
+  sunrise:'A2', shadow:'B1', silence:'B1', freedom:'B1',comfort:'B1',pleasure:'B1',
+  success:'B1', failure:'B1',courage:'B1', wisdom:'B1', beauty:'A2', power:'A2',
+  music:'A1',   dance:'A2',  movie:'A1',   story:'A1',  dream:'A2',  memory:'B1',
+  friend:'A1',  family:'A1', parent:'A2',  teacher:'A1',student:'A2',doctor:'A1',
+  morning:'A1', midnight:'B1',weekend:'A2',holiday:'A2',birthday:'A1',festival:'B1',
+  happy:'A1',   angry:'A2',  scared:'A2',  lonely:'B1', jealous:'B1',nervous:'B1',
+  excited:'A2', bored:'A2',  worried:'A2', grateful:'B1',proud:'A2', ashamed:'B1',
+  // 動詞常見字
+  travel:'A2',  arrive:'A2', return:'A2',  change:'A2', create:'B1', decide:'B1',
+  explain:'B1', improve:'B1',increase:'B1',reduce:'B1', become:'A2', believe:'A2',
+  choose:'A2',  follow:'A2', include:'B1', produce:'B1',receive:'A2',remember:'A2',
+  understand:'A2',suggest:'B1',develop:'B1',discuss:'B1',provide:'B1',require:'B1',
+  snake:'A2',horse:'A1',sheep:'A1',goat:'A2',pig:'A1',cow:'A1',hen:'A1',
+  fox:'A2',owl:'A2',bat:'A2',bee:'A1',ant:'A1',fly:'A1',bug:'A1',
+  elephant:'A2',monkey:'A2',rabbit:'A1',mouse:'A1',rat:'A2',whale:'A2',
+  shark:'A2',eagle:'A2',parrot:'A2',turtle:'A2',lizard:'B1',leopard:'B1',
+  dolphin:'B1',penguin:'B1',gorilla:'B1',crocodile:'B1',
+  // 常被誤判的常用字
+  jump:'A1',help:'A1',hope:'A2',play:'A1',find:'A1',make:'A1',take:'A1',
+  give:'A1',show:'A1',tell:'A1',feel:'A2',fall:'A2',rain:'A1',snow:'A1',
+  warm:'A1',cool:'A1',dark:'A2',bright:'A2',clean:'A2',sweet:'A2',soft:'A2',
+  hard:'A2',full:'A1',empty:'A2',quick:'A2',loud:'A2',quiet:'A2',
+  happy:'A1',sad:'A1',angry:'A2',tired:'A2',scared:'A2',brave:'A2',
+  funny:'A2',pretty:'A2',ugly:'A2',smart:'A2',silly:'A2',lucky:'A2',
+  sick:'A2',hurt:'A2',lost:'A2',dead:'A2',alive:'A2',ready:'A2',
+  // 常見動作
+  swim:'A2',climb:'A2',dance:'A2',sing:'A2',draw:'A2',paint:'B1',
+  build:'A2',break:'A2',catch:'A2',throw:'A2',kick:'A2',hit:'A2',
+  push:'A2',pull:'A2',lift:'B1',carry:'A2',hold:'A2',drop:'A2',accident:'A2',activity:'A2',address:'A2',afraid:'A2',airport:'A2',angry:'A2',
   animal:'A2',apartment:'A2',area:'A2',art:'A2',August:'A2',autumn:'A2',beautiful:'A2',
   become:'A2',begin:'A2',believe:'A2',between:'A2',bicycle:'A2',board:'A2',body:'A2',
   bored:'A2',boring:'A2',bring:'A2',build:'A2',busy:'A2',care:'A2',carry:'A2',celebrate:'A2',
@@ -643,19 +813,50 @@ async function getCEFR(word){
   // 1. 本地對照表（最快、最準確）
   if(CEFR_DB[w]) return CEFR_DB[w];
 
-  // 2. Cambridge Learner's Dictionary HTML scrape（需要網路，可能被 CORS 擋）
+  // 2. 牛津學習者字典（Oxford Learner's Dictionaries）HTML 爬蟲
   try{
-    const r = await sfetch(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(w)}`, 6000);
+    const r = await sfetch(
+      `https://www.oxfordlearnersdictionaries.com/definition/english/${encodeURIComponent(w)}`,
+      6000
+    );
+    if(r){
+      const html = await r.text();
+      // Oxford 格式：<div class="symbols">/span class="cefr"> B2 </span>
+      const m = html.match(/class="[^"]*cefr[^"]*"[^>]*>\s*([ABC][12])\s*</i)
+             || html.match(/CEFR[^:]*:\s*([ABC][12])/i)
+             || html.match(/>\s*([ABC][12])\s*<\/span>/i);
+      if(m){
+        const level = m[1].toUpperCase();
+        if(CEFR_LIST.includes(level)){
+          CEFR_DB[w] = level; // 快取進本地表
+          return level;
+        }
+      }
+    }
+  }catch(e){}
+
+  // 3. Cambridge Learner's Dictionary HTML 爬蟲（備援）
+  try{
+    const r = await sfetch(
+      `https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(w)}`,
+      6000
+    );
     if(r){
       const html = await r.text();
       const m = html.match(/class="epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
              || html.match(/>\s*([ABC][12])\s*<\/span>/i)
              || html.match(/data-level="([ABC][12])"/i);
-      if(m) return m[1].toUpperCase();
+      if(m){
+        const level = m[1].toUpperCase();
+        if(CEFR_LIST.includes(level)){
+          CEFR_DB[w] = level;
+          return level;
+        }
+      }
     }
   }catch(e){}
 
-  return null; // 讓 fetchWordData 用字長估算
+  return null;
 }
 
 // ── 內建常見字翻譯對照（保底，MyMemory 失敗時用）──
@@ -746,112 +947,105 @@ async function getTranslation(text){
 }
 
 async function getWiki(word){
-  // Try Chinese Wikipedia first
-  try{
-    const r = await sfetch(`https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`, 5000);
-    if(r){
-      const d = await r.json();
-      const pages = d?.query?.pages;
-      const id = pages ? Object.keys(pages)[0] : '-1';
-      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 20){
-        return { title: pages[id].title, extract: pages[id].extract, lang:'zh' };
-      }
-    }
-  }catch(e){}
+  // 中文和英文 Wikipedia 同時查，取最快有資料的
+  const zhWiki = sfetch(
+    `https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`,
+    4000
+  ).then(async r=>{
+    if(!r) return null;
+    try{
+      const d=await r.json(); const pages=d?.query?.pages;
+      const id=pages?Object.keys(pages)[0]:'-1';
+      if(id!=='-1'&&pages[id]?.extract&&pages[id].extract.length>20)
+        return {title:pages[id].title,extract:pages[id].extract,lang:'zh'};
+    }catch(e){}
+    return null;
+  }).catch(()=>null);
 
-  // Fallback: English Wikipedia
-  try{
-    const r = await sfetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=4&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`, 5000);
-    if(r){
-      const d = await r.json();
-      const pages = d?.query?.pages;
-      const id = pages ? Object.keys(pages)[0] : '-1';
-      if(id!=='-1' && pages[id]?.extract && pages[id].extract.length > 20){
-        return { title: pages[id].title, extract: pages[id].extract, lang:'en' };
-      }
-    }
-  }catch(e){}
+  const enWiki = sfetch(
+    `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exsentences=3&explaintext=1&titles=${encodeURIComponent(word)}&redirects=1&format=json&origin=*`,
+    4000
+  ).then(async r=>{
+    if(!r) return null;
+    try{
+      const d=await r.json(); const pages=d?.query?.pages;
+      const id=pages?Object.keys(pages)[0]:'-1';
+      if(id!=='-1'&&pages[id]?.extract&&pages[id].extract.length>20)
+        return {title:pages[id].title,extract:pages[id].extract,lang:'en'};
+    }catch(e){}
+    return null;
+  }).catch(()=>null);
 
-  return null;
+  const [zh, en] = await Promise.all([zhWiki, enWiki]);
+  return zh || en || null;
 }
 
-// Master word-data fetch — ALL APIs run in parallel
+// Master word-data fetch — 嚴格 8 秒總時限，超時就用已有資料
 async function fetchWordData(word){
   const w = word.toLowerCase();
   const res = { word:w, phonetic:'', cefr:null, meanings:[], translation:'', explanation:'', isRare:false };
 
-  // Run dict, CEFR, word-translation all at once
-  const [dictResult, cefrResult, trResult] = await Promise.allSettled([
+  // 本地 ZH_DICT 翻譯優先（即時）
+  if(ZH_DICT[w]) res.translation = ZH_DICT[w];
+  // 本地 CEFR_DB 優先（即時）
+  if(CEFR_DB[w]) res.cefr = CEFR_DB[w];
+
+  // 全部 API 並行，加嚴格 7 秒總時限
+  const timeout = new Promise(resolve=>setTimeout(()=>resolve('timeout'), 7000));
+
+  const apiRace = Promise.allSettled([
     getDictData(w),
-    getCEFR(w),
-    getTranslation(w),
+    res.cefr ? Promise.resolve(null) : getCEFR(w),  // 本地已有就不查
+    res.translation ? Promise.resolve('') : getTranslation(w),
+    getWiki(w),
   ]);
 
-  // Apply dict
-  if(dictResult.status==='fulfilled' && dictResult.value){
-    res.phonetic  = dictResult.value.phonetic;
-    res.meanings  = dictResult.value.meanings;
-  }
+  const result = await Promise.race([apiRace, timeout]);
 
-  // Apply CEFR
-  if(cefrResult.status==='fulfilled' && cefrResult.value){
-    res.cefr = cefrResult.value;
-  }
+  if(result !== 'timeout'){
+    const [dictR, cefrR, trR, wikiR] = result;
 
-  // Apply translation (only if it's genuinely Chinese)
-  if(trResult.status==='fulfilled' && trResult.value){
-    res.translation = trResult.value;
-  }
-
-  // Wikipedia: always try for explanation — critical for words not in Free Dictionary
-  // Run in parallel with the already-collected data
-  const wikiResult = await getWiki(w);
-
-  if(!res.meanings.length){
-    res.isRare = true;
-    if(wikiResult){
-      res.explanation = wikiResult.extract;
-      const wikiTitle = wikiResult.title;
-      if(wikiTitle && wikiTitle.toLowerCase() !== w && /[\u4e00-\u9fff]/.test(wikiTitle)){
-        if(!res.translation) res.translation = wikiTitle.slice(0,16);
-      }
+    if(dictR?.status==='fulfilled' && dictR.value){
+      res.phonetic = dictR.value.phonetic;
+      res.meanings = dictR.value.meanings;
     }
-  } else {
-    // Even when we have dict data, add wiki as supplemental explanation
-    if(wikiResult && !res.explanation){
-      // Only use if it looks informative (not just a stub)
-      if(wikiResult.extract && wikiResult.extract.length > 50){
-        res.explanation = (wikiResult.lang==='zh' ? '' : '【Wikipedia】') + wikiResult.extract;
+    if(cefrR?.status==='fulfilled' && cefrR.value && !res.cefr){
+      res.cefr = cefrR.value;
+    }
+    if(trR?.status==='fulfilled' && trR.value && !res.translation){
+      res.translation = trR.value;
+    }
+    if(wikiR?.status==='fulfilled' && wikiR.value){
+      const wiki = wikiR.value;
+      if(!res.meanings.length){
+        res.isRare = true;
+        res.explanation = wiki.extract;
+        if(!res.translation && wiki.title && wiki.title.toLowerCase()!==w && /[\u4e00-\u9fff]/.test(wiki.title)){
+          res.translation = wiki.title.slice(0,16);
+        }
+      } else if(!res.explanation && wiki.extract.length > 50){
+        res.explanation = (wiki.lang==='zh' ? '' : '【Wikipedia】') + wiki.extract;
       }
     }
   }
 
-  // Still no translation? Try translating the first English definition
+  // 翻譯備用：從第一條定義翻譯（非同步，不阻塞）
   if(!res.translation && res.meanings.length){
-    const firstDef = res.meanings[0]?.definitions[0]?.def || '';
-    if(firstDef) res.translation = await getTranslation(firstDef);
+    getTranslation(res.meanings[0].definitions[0]?.def?.slice(0,150)||'').then(t=>{
+      if(t) res.translation=t;
+    });
   }
 
-  // Still nothing? Try translating the word itself one more time via Google
-  if(!res.translation){
-    try{
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(w)}`;
-      const r = await sfetch(url, 5000);
-      if(r){ const d=await r.json(); const t=cleanTr(d?.[0]?.[0]?.[0],w); if(t) res.translation=t; }
-    }catch(e){}
-  }
-
-  // Translate first definition to Chinese for the card modal detail view
+  // 翻譯第一條定義（背景非阻塞，讓 UI 先顯示）
   if(res.meanings[0]?.definitions[0] && !res.meanings[0].definitions[0].zh){
-    const defTr = await getTranslation(res.meanings[0].definitions[0].def.slice(0,180));
-    if(defTr) res.meanings[0].definitions[0].zh = defTr;
+    getTranslation(res.meanings[0].definitions[0].def.slice(0,160)).then(t=>{
+      if(t) res.meanings[0].definitions[0].zh = t;
+    });
   }
-
-  // Also translate 2nd and 3rd meanings in background (non-blocking)
-  res.meanings.slice(1,3).forEach(async m => {
+  // 其他詞性定義也在背景翻
+  res.meanings.slice(1,3).forEach(m=>{
     if(m.definitions[0] && !m.definitions[0].zh){
-      const t = await getTranslation(m.definitions[0].def.slice(0,160));
-      if(t) m.definitions[0].zh = t;
+      getTranslation(m.definitions[0].def.slice(0,140)).then(t=>{ if(t) m.definitions[0].zh=t; });
     }
   });
 
@@ -860,11 +1054,15 @@ async function fetchWordData(word){
     res.explanation = res.meanings.map(m=>`【${m.partOfSpeech}】${m.definitions[0]?.def||''}`).join('\n');
   }
 
-  // Last-resort fallback for translation — use POS label, never show original word
+  // Last-resort fallback for translation — use POS label, never show bare English word
   if(!res.translation){
-    const posMap = {noun:'名詞',verb:'動詞',adjective:'形容詞',adverb:'副詞',pronoun:'代名詞',conjunction:'連接詞',preposition:'介系詞',exclamation:'感嘆詞'};
+    const posMap = {noun:'名詞',verb:'動詞',adjective:'形容詞',adverb:'副詞',
+                    pronoun:'代名詞',conjunction:'連接詞',preposition:'介系詞',exclamation:'感嘆詞'};
     const pos = res.meanings[0]?.partOfSpeech;
-    res.translation = pos ? `[${posMap[pos]||pos}]` : `[英文單字]`;
+    // Try to extract a key concept from the first definition
+    const firstDef = res.meanings[0]?.definitions[0]?.def || '';
+    const shortDef = firstDef.replace(/\(.*?\)/g,'').trim().split(/[,;.]/)[0].trim();
+    res.translation = pos ? `[${posMap[pos]||pos}]` : (shortDef.slice(0,20) || w);
   }
   if(!res.cefr) res.cefr = res.isRare ? 'C2' : estCEFR(w);
 
@@ -874,22 +1072,38 @@ async function fetchWordData(word){
 // ════════════════════════════════
 // BUILD CARD
 // ════════════════════════════════
-function buildCard(wd, mistakes, maxM){
-  const stars   = c2s(wd.cefr);
-  const acc     = Math.max(0, 1 - mistakes/maxM);
-  const defC    = wd.meanings.reduce((s,m)=>s+m.definitions.length,0) || 1;
-  const posC    = wd.meanings.length || 1;
+function buildCard(wd, mistakes, maxM, hintPenalty=0){
+  const stars  = c2s(wd.cefr);
+  const wlen   = wd.word.length;
+  const acc    = Math.max(0, 1 - mistakes/maxM);      // 0..1，錯越少越高
+  const defC   = wd.meanings.reduce((s,m)=>s+m.definitions.length,0) || 1;
+  const posC   = wd.meanings.length || 1;
+
+  // 短字加成（≤5字母 → 顯著加成，因為格子少很難猜）
+  const shortBonus = wlen <= 4 ? 0.80
+                   : wlen === 5 ? 0.50
+                   : wlen === 6 ? 0.20
+                   : 0;
+
   const baseHP  = 80 + stars*28 + defC*14 + posC*10;
   const baseATK = 45 + stars*22 + defC*9  + posC*6;
-  const bonus   = Math.round(acc * 70);
+  const accBonus = Math.round(acc * 70);
+  const shortMult = 1 + shortBonus;
+  // 提示扣減（0=沒用提示, 0.3=用了類型, 0.45=類型+字母, ...）
+  const hintMult = Math.max(0.1, 1 - hintPenalty);
+
+  const hp  = Math.round((baseHP  + accBonus) * shortMult * hintMult) + ~~(Math.random()*20);
+  const atk = Math.round((baseATK + accBonus) * shortMult * hintMult) + ~~(Math.random()*15);
+  const dispStars = shortBonus > 0 ? Math.max(stars, 2) : stars;
+
   return {
     id:`${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
     word:wd.word.toUpperCase(), wordLower:wd.word,
-    phonetic:wd.phonetic, cefr:wd.cefr, stars,
+    phonetic:wd.phonetic, cefr:wd.cefr, stars:dispStars,
     translation:wd.translation, explanation:wd.explanation,
     meanings:wd.meanings, isRare:wd.isRare,
-    hp:  baseHP  + bonus + ~~(Math.random()*20),
-    atk: baseATK + bonus + ~~(Math.random()*15),
+    shortWord: shortBonus > 0,   // 標記短字，卡牌庫可顯示特殊標籤
+    hp, atk,
     isNew:true, createdAt:Date.now()
   };
 }
@@ -901,11 +1115,17 @@ function cardH(card, mini){
   const s   = card.stars, cc = cCol(card.cefr);
   const wl  = card.word.length;
   const ws  = wl>9?'12px':wl>7?'14px':wl>5?'17px':'20px';
-  const sz  = mini ? 7 : 9;
   const starsH = Array.from({length:6}, (_,i)=>ICO.star(i<s,cc)).join('');
   const hpH  = `${ICO.heart} ${card.hp}`;
   const atkH = `${ICO.bolt} ${card.atk}`;
-  return `<div class="ci s${s}" style="${mini?'border-radius:10px':''}">
+
+  // 短字加成標記 (僅完整尺寸卡牌顯示，mini 不顯示避免太擠)
+  const shortBadge = (!mini && card.shortWord)
+    ? `<div style="position:absolute;top:0;left:0;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;font-size:7px;font-weight:900;padding:2px 5px;border-radius:0 0 6px 0;letter-spacing:.5px">SHORT+</div>`
+    : '';
+
+  return `<div class="ci s${s}" style="${mini?'border-radius:10px;':''}position:relative;overflow:hidden;width:100%;height:100%">
+    ${shortBadge}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
       <div style="display:flex;gap:2px">${starsH}</div>
       <div class="cchip tag" style="color:${cc};border-color:${cc}35;background:${cBg(card.cefr)}">${card.cefr}</div>
@@ -972,19 +1192,177 @@ function renderHM(){
     const miss = hm.guessed.has(c) && !hm.word.includes(c);
     return `<button class="key ${hit?'hit':miss?'miss':''}" onclick="guess('${c}')" ${hm.guessed.has(c)?'disabled':''}>${c}</button>`;
   }).join('');
+
+  // 提示按鈕
+  renderHintButtons();
 }
 
 // ════════════════════════════════
 // HANGMAN LOGIC
 // ════════════════════════════════
 async function startHM(){
-  S.hm = {status:'loading',word:'',guessed:new Set(),mistakes:0,maxMistakes:6,errors:0,details:null,newCard:null};
+  S.hm = {
+    status:'loading', word:'', guessed:new Set(),
+    mistakes:0, maxMistakes:6, errors:0, details:null, newCard:null,
+    hint:null, hintPenalty:0, hintUsed:{ cat:false, letters:[] }
+  };
   document.getElementById('roverlay').classList.remove('on');
   renderHM();
   const w = await getRandWord();
   S.hm.word = w.toUpperCase();
   S.hm.status = 'playing';
+  // 背景預先抓分類 hint（不阻塞遊戲）
+  fetchHintData(w).then(h=>{ S.hm.hint = h; renderHintButtons(); });
   renderHM();
+}
+
+// ════════════════════════════════
+// HINT SYSTEM
+// ════════════════════════════════
+
+// 語義分類標籤
+const CATEGORY_TAGS = {
+  // 詞性類
+  animal:   '🐾 動物類',  plant:    '🌿 植物類',  food:     '🍎 食物類',
+  body:     '💪 身體部位', emotion:  '❤️ 情感類',  action:   '🏃 動作類',
+  place:    '📍 地點類',  object:   '📦 物品類',  nature:   '🌊 自然類',
+  science:  '🔬 科學類',  art:      '🎨 藝術類',  sport:    '⚽ 運動類',
+  person:   '👤 人物類',  time:     '⏰ 時間類',  abstract: '💭 抽象概念',
+  color:    '🎨 顏色類',  size:     '📏 尺寸類',  weather:  '⛅ 天氣類',
+  music:    '🎵 音樂類',  language: '📝 語言類',  number:   '🔢 數字類',
+};
+
+// 用字典定義推斷語義分類
+async function fetchHintData(word){
+  const w = word.toLowerCase();
+  let category = null;
+  let pos = null;
+
+  try{
+    const r = await sfetch(
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`,
+      5000
+    );
+    if(r){
+      const data = await r.json();
+      pos = data?.[0]?.meanings?.[0]?.partOfSpeech;
+      const defs = data?.[0]?.meanings?.flatMap(m=>m.definitions.map(d=>d.definition.toLowerCase())) || [];
+      const allText = defs.join(' ');
+
+      // 順序很重要：人物 > 動物 > 植物 > 食物 > 身體 > 情感 > 天氣 > 地點 > 科學 > 藝術 > 運動 > 音樂 > 動作 > 物品 > 抽象
+      if(/\b(person|people|individual|human|man|woman|someone|student|teacher|worker|graduate|professional|officer|official|citizen)\b/.test(allText))
+        category='person';
+      else if(/\b(animal|mammal|bird|fish|insect|reptile|species|creature|beast|wildlife)\b/.test(allText))
+        category='animal';
+      else if(/\b(plant|tree|flower|leaf|root|herb|shrub|grass|vegetation|botanical)\b/.test(allText))
+        category='plant';
+      else if(/\b(food|eat|edible|fruit|vegetable|meal|cook|flavor|taste|dish|ingredient|beverage)\b/.test(allText))
+        category='food';
+      else if(/\b(body|muscle|bone|organ|skin|blood|nerve|anatomical|limb|tissue)\b/.test(allText))
+        category='body';
+      else if(/\b(feeling|emotion|mood|happiness|sadness|anger|fear|love|joy|grief|anxiety|sorrow|delight)\b/.test(allText))
+        category='emotion';
+      else if(/\b(weather|climate|temperature|atmospheric|meteorological|rainfall|humidity)\b/.test(allText))
+        category='weather';
+      else if(/\b(place|location|region|area|land|geography|territory|site|country|city|town|village|space)\b/.test(allText))
+        category='place';
+      else if(/\b(natural|nature|landscape|geological|environment|ecosystem|terrain|ocean|river|mountain)\b/.test(allText))
+        category='nature';
+      else if(/\b(science|physics|chemical|biology|experiment|theory|laboratory|mathematical|formula)\b/.test(allText))
+        category='science';
+      else if(/\b(art|paint|draw|sculpture|design|creative|aesthetic|artistic|visual|crafts)\b/.test(allText))
+        category='art';
+      else if(/\b(sport|game|athletic|compete|athlete|team|race|match|exercise|fitness|tournament)\b/.test(allText))
+        category='sport';
+      else if(/\b(music|song|melody|rhythm|instrument|note|chord|musical|tune|harmony|composition)\b/.test(allText))
+        category='music';
+      else if(/\b(move|motion|movement|action|gesture|physical activity|locomotion)\b/.test(allText))
+        category='action';
+      else if(pos==='adjective' || pos==='adverb')
+        category='abstract';
+      else if(pos==='verb')
+        category='action';
+      else if(pos==='noun')
+        category='object';
+    }
+  }catch(e){}
+
+  return { category };
+}
+
+// 渲染提示按鈕（在 kb 下方）
+function renderHintButtons(){
+  const hm = S.hm;
+  if(hm.status !== 'playing') return;
+  const hintEl = document.getElementById('hint');
+  if(!hintEl) return;
+
+  const catLabel = hm.hint?.category ? CATEGORY_TAGS[hm.hint.category] : null;
+  const canUseCat = catLabel && !hm.hintUsed.cat;
+  const unrevealedIdx = hm.word.split('').reduce((arr,c,i)=>{
+    if(!hm.guessed.has(c) && !hm.hintUsed.letters.includes(i)) arr.push(i);
+    return arr;
+  }, []);
+  const canUseLetter = unrevealedIdx.length > 0;
+
+  // 顯示已用提示資訊
+  const usedInfo = [];
+  if(hm.hintUsed.cat && catLabel) usedInfo.push(`<span style="color:#f59e0b;font-size:11px">💡 ${catLabel}</span>`);
+  hm.hintUsed.letters.forEach(idx => usedInfo.push(`<span style="color:#60a5fa;font-size:11px">🔤 第${idx+1}個字母已提示</span>`));
+
+  const penalty = Math.round(hm.hintPenalty * 100);
+
+  hintEl.innerHTML = `
+  <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:6px;padding:4px 0">
+    ${usedInfo.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${usedInfo.join('')}</div>` : ''}
+    ${penalty > 0 ? `<div style="font-size:10px;color:var(--danger)">提示扣減：-${penalty}% 卡牌強度</div>` : ''}
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      ${canUseCat ? `<button onclick="useHintCat()" style="background:#f59e0b18;border:1px solid #f59e0b40;color:#f59e0b;font-size:11px;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer">
+        💡 類型提示 <span style="opacity:.7;font-size:10px">(-30%)</span>
+      </button>` : (!hm.hintUsed.cat && !catLabel ? `<button disabled style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:5px 12px;border-radius:8px;opacity:.5">
+        💡 類型載入中…
+      </button>` : '')}
+      ${canUseLetter ? `<button onclick="useHintLetter()" style="background:#60a5fa18;border:1px solid #60a5fa40;color:#60a5fa;font-size:11px;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer">
+        🔤 字母提示 <span style="opacity:.7;font-size:10px">(-15%)</span>
+      </button>` : ''}
+    </div>
+  </div>`;
+}
+
+function useHintCat(){
+  const hm = S.hm;
+  if(hm.hintUsed.cat || !hm.hint?.category) return;
+  hm.hintUsed.cat = true;
+  hm.hintPenalty = Math.min(1, hm.hintPenalty + 0.30);
+  hm.errors = Math.max(hm.errors, 1); // 用提示至少算1次錯
+  toast(`類型提示：${CATEGORY_TAGS[hm.hint.category]} （已扣 30% 強度）`, 'info');
+  renderHintButtons();
+}
+
+function useHintLetter(){
+  const hm = S.hm;
+  // 找一個未猜到且未提示過的字母位置，優先選中間位置（不要給第一個）
+  const unrevIdx = hm.word.split('').reduce((arr,c,i)=>{
+    if(!hm.guessed.has(c) && !hm.hintUsed.letters.includes(i)) arr.push(i);
+    return arr;
+  }, []);
+  if(!unrevIdx.length) return;
+  // 優先中間位置，避免直接給最後一個
+  unrevIdx.sort((a,b)=>Math.abs(a-hm.word.length/2)-Math.abs(b-hm.word.length/2));
+  const idx = unrevIdx[0];
+  const letter = hm.word[idx];
+
+  hm.hintUsed.letters.push(idx);
+  hm.hintPenalty = Math.min(1, hm.hintPenalty + 0.15);
+  // 揭示這個字母（相當於猜中它）
+  hm.guessed.add(letter);
+  // 但不算猜中加分，只靜默加入（不觸發 won 判斷，讓玩家繼續猜）
+  toast(`字母提示：第 ${idx+1} 個字母是「${letter}」（已扣 15% 強度）`, 'info');
+
+  // 如果這樣揭示後已全猜完，正常觸發結束
+  if(hm.word.split('').every(c=>hm.guessed.has(c))){ endHM('won'); return; }
+  renderHM();
+  renderHintButtons();
 }
 
 function guess(l){
@@ -1008,8 +1386,35 @@ async function endHM(result){
   const wd = await fetchWordData(S.hm.word.toLowerCase());
   S.hm.details = wd;
   if(result==='won'){
-    const card = buildCard(wd, S.hm.errors, S.hm.maxMistakes);
-    S.cards.unshift(card); S.hm.newCard = card;
+    const card = buildCard(wd, S.hm.errors, S.hm.maxMistakes, S.hm.hintPenalty);
+
+    // 重複卡合併：找同一個字（忽略大小寫）的現有卡
+    const existIdx = S.cards.findIndex(c =>
+      (c.wordLower||c.word.toLowerCase()) === card.wordLower
+    );
+
+    if(existIdx >= 0){
+      // 合併：HP/ATK 取平均，保留較好的翻譯/字義，標記為升級
+      const existing = S.cards[existIdx];
+      const n = (existing.mergeCount||1) + 1; // 合併次數
+      existing.hp  = Math.round((existing.hp  * (n-1) + card.hp)  / n);
+      existing.atk = Math.round((existing.atk * (n-1) + card.atk) / n);
+      existing.mergeCount = n;
+      existing.isNew = true;
+      // 更新字義（新的可能更完整）
+      if(card.meanings?.length > (existing.meanings?.length||0)) existing.meanings = card.meanings;
+      if(card.translation && !/^\[/.test(card.translation)) existing.translation = card.translation;
+      if(card.explanation) existing.explanation = card.explanation;
+      if(card.phonetic) existing.phonetic = card.phonetic;
+      S.hm.newCard = existing;
+      S.hm.merged = true;
+      toast(`「${card.word}」已合併！HP/ATK 平均提升`, 'ok');
+    } else {
+      S.cards.unshift(card);
+      S.hm.newCard = card;
+      S.hm.merged = false;
+    }
+
     if(!S.unlockedLib){ S.unlockedLib=true; unlockNav(); }
     save(); updHdr();
     if(S.tab!=='library'){
@@ -1040,9 +1445,9 @@ function renderResult(result){
   rc.innerHTML=`
   <div style="text-align:center;margin-bottom:14px">
     ${result==='won'
-      ? `<div style="font-size:40px;margin-bottom:4px">🎉</div>
-         <div class="ko" style="font-size:28px;color:var(--ok)">CLEAR!</div>
-         <div style="font-size:12px;color:var(--muted);margin-top:2px">猜對了！新卡牌已加入庫中</div>`
+      ? `<div style="font-size:40px;margin-bottom:4px">${S.hm.merged?'🔀':'🎉'}</div>
+         <div class="ko" style="font-size:28px;color:var(--ok)">${S.hm.merged?'MERGED!':'CLEAR!'}</div>
+         <div style="font-size:12px;color:var(--muted);margin-top:2px">${S.hm.merged?'重複卡牌已合併，數值取平均值！':'猜對了！新卡牌已加入庫中'}</div>`
       : `<div style="font-size:40px;margin-bottom:4px">💀</div>
          <div class="ko" style="font-size:28px;color:var(--danger)">GAME OVER</div>
          <div style="font-size:12px;color:var(--muted);margin-top:2px">答案是：<strong style="color:#fff">${hm.word}</strong></div>`
@@ -1090,7 +1495,22 @@ function renderResult(result){
     <div style="background:var(--bg3);border-radius:999px;height:5px;overflow:hidden">
       <div style="height:100%;width:${ap}%;background:${ap>66?'var(--ok)':ap>33?'#fbbf24':'var(--danger)'};border-radius:999px;transition:width .7s .1s"></div>
     </div>
-    <div style="font-size:10px;color:var(--muted);margin-top:5px">正確率越高 → 卡牌 HP / ATK 更強</div>
+    ${(()=>{
+      const wlen = (wd?.word||hm.word).length;
+      const shortBonus = wlen<=4?'+80%':wlen===5?'+50%':wlen===6?'+20%':null;
+      const n = S.cards.length;
+      const tier = n<5?0:n<15?1:n<30?2:3;
+      const tierLabel = ['新手','初級','中級','高級'][tier];
+      const tierColor = ['#94a3b8','#4ade80','#60a5fa','#facc15'][tier];
+      const nextTier  = [5,15,30,Infinity][tier];
+      const cardsToNext = nextTier===Infinity ? null : nextTier - n;
+      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        ${shortBonus ? `<div style="background:#f59e0b20;border:1px solid #f59e0b50;color:#f59e0b;font-size:10px;font-weight:900;padding:2px 7px;border-radius:4px">SHORT ${shortBonus} 加成</div>` : ''}
+        <div style="background:${tierColor}18;border:1px solid ${tierColor}40;color:${tierColor};font-size:10px;font-weight:900;padding:2px 7px;border-radius:4px">難度 ${tierLabel}</div>
+        ${cardsToNext ? `<div style="font-size:10px;color:var(--muted)">再收 ${cardsToNext} 張難度提升</div>` : `<div style="font-size:10px;color:#facc15">最高難度！</div>`}
+      </div>`;
+    })()}
+    <div style="font-size:10px;color:var(--muted);margin-top:5px">正確率越高 × 短字加成 × 字義越豐富 → 卡牌更強</div>
   </div>` : ''}
 
   <button class="btn btnp" style="width:100%;font-size:15px;margin-bottom:8px" onclick="startHM()">
@@ -1415,7 +1835,11 @@ function renderDeck(){
   aIn().innerHTML=`
   <div style="margin-bottom:12px">
     <div style="font-size:13px;font-weight:800;margin-bottom:8px">選擇牌組（${S.ar.deck.length}/4）</div>
-    <div style="display:flex;gap:7px">${slots}</div>
+    <div style="display:flex;gap:7px;margin-bottom:10px">${slots}</div>
+    <button class="btn btnp" style="width:100%;font-size:15px" ${S.ar.deck.length!==4?'disabled':''} onclick="startBattle_${S.ar._mode}()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6 2 2-6 6z"/><path d="M3 21l4-4"/></svg>
+      ${S.ar.deck.length===4?'出戰！':'選滿 4 張再出戰（'+S.ar.deck.length+'/4）'}
+    </button>
   </div>
   <div class="dvd"></div>
   <div style="font-size:11px;color:var(--muted);margin-bottom:8px">點擊卡牌加入牌組（共 ${S.cards.length} 張）</div>
@@ -1424,11 +1848,7 @@ function renderDeck(){
       const sel=si.has(c.id);
       return `<div class="cw" onclick="toggleDeck('${c.id}')" style="opacity:${sel?.38:1};${sel?'pointer-events:none':''}">${cardH(c)}</div>`;
     }).join('')}
-  </div>
-  <button class="btn btnp" style="width:100%;font-size:15px" ${S.ar.deck.length!==4?'disabled':''} onclick="startBattle_${S.ar._mode}()">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6 2 2-6 6z"/><path d="M3 21l4-4"/></svg>
-    出戰！
-  </button>`;
+  </div>`;
 }
 function toggleDeck(cid){
   const idx=S.ar.deck.findIndex(c=>c.id===cid);
@@ -1521,18 +1941,29 @@ function renderAI(){
   const isAnimating = ar.animating;
   const hH = ar.pl.hand.map((c,i)=>{
     const u=ar.pl.used.has(i);
-    return `<div class="hcard ${u?'used':''}" onclick="if(!${u}&&!${isAnimating})playAI(${i})">${cardH(c,true)}</div>`;
+    // 用 data-idx 傳遞索引，用 pointer-events 控制點擊，避免 inline bool 字串化問題
+    return `<div class="hcard ${u?'used':''}" data-idx="${i}" style="${(u||isAnimating)?'pointer-events:none':''}">${cardH(c,true)}</div>`;
   }).join('');
   aIn().innerHTML=`
   ${scoreHUD(pw, aw, r)}
   ${ar.rr ? rrBlock({...ar.rr, opC:ar.rr.aiC}, '你', 'AI') : ''}
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px;${isAnimating?'opacity:.5;pointer-events:none':''}">
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:10px">
     <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">${isAnimating?'交鋒中…':'選擇出戰卡牌（點擊出牌）'}</div>
-    <div class="hand-row">${hH}</div>
+    <div class="hand-row" id="ai-hand-row" onclick="aiHandClick(event)">${hH}</div>
   </div>
   <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px">
     ${ICO.info} ATK 互相攻擊，剩餘 HP 高的獲勝
   </div>`;
+}
+
+// 用事件委派處理手牌點擊，避免 inline bool 問題
+function aiHandClick(event){
+  if(S.ar.animating) return;
+  const card = event.target.closest('[data-idx]');
+  if(!card) return;
+  const idx = parseInt(card.dataset.idx);
+  if(isNaN(idx)) return;
+  playAI(idx);
 }
 
 function playAI(idx){
@@ -1567,43 +1998,236 @@ function playAI(idx){
 // ════════════════════════════════
 // NETWORK BATTLE (PeerJS)
 // ════════════════════════════════
-function startBattle_net(){ S.ar.phase='net_lobby'; renderNetLobby(); }
+function startBattle_net(){ S.ar.phase='net_lobby'; S.ar._autoSearching=false; renderNetLobby(); }
 
 function renderNetLobby(){
   aIn().innerHTML=`
-  <div style="text-align:center;padding:12px 0 10px">
+  <div style="text-align:center;padding:10px 0 8px">
     <div style="font-size:14px;font-weight:800;margin-bottom:3px">連線對戰</div>
     <div style="font-size:11px;color:var(--muted)">PeerJS P2P · 零設定</div>
   </div>
+
+  <!-- 自動匹配 -->
+  <div style="background:var(--bg2);border:1px solid var(--accent);border-radius:14px;padding:14px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:800;margin-bottom:5px;color:var(--accent);display:flex;align-items:center;gap:5px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      快速匹配
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:9px">自動尋找等待中的對手，無需分享房間碼</div>
+    <button class="btn btnp" style="width:100%" id="btn-auto" onclick="netAutoMatch()">快速匹配</button>
+    <div id="auto-st" style="font-size:12px;color:var(--muted);text-align:center;margin-top:7px;min-height:16px"></div>
+    <button id="btn-cancel-auto" class="btn btnd" style="width:100%;margin-top:7px;display:none" onclick="cancelAutoMatch()">取消匹配</button>
+  </div>
+
+  <!-- 私人房間 -->
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">
-    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--accent);display:flex;align-items:center;gap:5px">${ICO.door} 建立房間</div>
-    <button class="btn btnp" style="width:100%" id="btn-host" onclick="netHost()">建立並生成房間碼</button>
-    <div id="host-area" style="display:none;margin-top:12px;text-align:center">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">分享房間碼給朋友</div>
+    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--muted);display:flex;align-items:center;gap:5px">${ICO.door} 私人房間（與朋友）</div>
+    <button class="btn btns" style="width:100%;margin-bottom:8px" id="btn-host" onclick="netHost()">建立房間取得碼</button>
+    <div id="host-area" style="display:none;margin-bottom:8px;text-align:center">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">分享這個碼給朋友</div>
       <div id="rcode-disp" class="rcode"></div>
       <button onclick="copyCode()" class="btn btns" style="margin-top:7px;font-size:12px;padding:7px 12px">${ICO.copy} 複製</button>
       <div id="host-st" style="font-size:12px;color:var(--muted);margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px">
         ${ICO.spin} 等待對手連線…
       </div>
     </div>
-  </div>
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px">
-    <div style="font-size:12px;font-weight:800;margin-bottom:9px;color:var(--accent2);display:flex;align-items:center;gap:5px">${ICO.enter} 加入房間</div>
-    <input type="text" class="rinput" id="jin" placeholder="輸入房間碼" maxlength="6">
-    <button class="btn" style="width:100%;margin-top:9px;background:var(--accent2);color:#fff;font-size:14px" onclick="netJoin()">加入</button>
+    <div style="display:flex;gap:8px">
+      <input type="text" class="rinput" id="jin" placeholder="貼上房間碼" maxlength="6" style="font-size:16px;flex:1">
+      <button class="btn" style="background:var(--accent2);color:#fff;padding:0 16px;flex-shrink:0" onclick="netJoin()">加入</button>
+    </div>
     <div id="join-st" style="font-size:12px;color:var(--muted);text-align:center;margin-top:7px;min-height:16px"></div>
   </div>`;
 }
 
+// ══════════════════════════════════════
+// 自動匹配：slot-based peer ID 機制
+// 每 40 秒一個 slot，同 slot 的人自然配對
+// 先加入 → 成功則為 Joiner；失敗則開房為 Host
+// ══════════════════════════════════════
+function getSlotCode(){
+  // slot 每 40 秒換一次
+  const slot = Math.floor(Date.now() / 40000);
+  // 用 slot 生成一個固定的 6 碼 peer ID
+  const h = (slot * 2654435761 >>> 0).toString(36).toUpperCase().padStart(6,'0').slice(0,6);
+  return 'M' + h.slice(0,5); // 6 chars, starts with M to avoid collision with user codes
+}
+function getPrevSlotCode(){
+  const slot = Math.floor(Date.now() / 40000) - 1;
+  const h = (slot * 2654435761 >>> 0).toString(36).toUpperCase().padStart(6,'0').slice(0,6);
+  return 'M' + h.slice(0,5);
+}
+
+function netAutoMatch(){ withPeer(()=>_netAutoMatch()); }
+async function _netAutoMatch(){
+  const btn=document.getElementById('btn-auto');
+  const cancelBtn=document.getElementById('btn-cancel-auto');
+  const stEl=document.getElementById('auto-st');
+  if(S.ar._autoSearching) return;
+  S.ar._autoSearching=true;
+  btn.disabled=true; btn.innerHTML=`${ICO.spin} 搜尋中…`;
+  cancelBtn.style.display='block';
+
+  // 先試當前 slot，再試上一個 slot（邊界保護）
+  for(const code of [getSlotCode(), getPrevSlotCode()]){
+    if(!S.ar._autoSearching) return;
+    stEl.innerHTML=`${ICO.spin} 搜尋對手中…`;
+    const ok = await tryAutoJoin(code);
+    if(ok) return; // 成功，handleNet 會切換畫面
+  }
+
+  // 沒找到 → 自己開房等待
+  if(!S.ar._autoSearching) return;
+  stEl.innerHTML=`${ICO.spin} 開房等待對手加入…`;
+  const myCode = getSlotCode();
+  autoHostRoom(myCode);
+}
+
+function cancelAutoMatch(){
+  S.ar._autoSearching=false;
+  if(S.ar.peer){ try{S.ar.peer.destroy()}catch(e){} S.ar.peer=null; }
+  S.ar.conn=null;
+  renderNetLobby();
+}
+
+function tryAutoJoin(code){
+  return new Promise(resolve=>{
+    if(!S.ar._autoSearching){ resolve(false); return; }
+    const peer = makePeer(null);
+    let done=false;
+    const finish=(v)=>{ if(!done){ done=true; if(!v){ try{peer.destroy()}catch(e){} } resolve(v); } };
+
+    peer.on('open',()=>{
+      const conn = peer.connect(code, {reliable:true});
+      conn.on('open',()=>{
+        // 成功連上！
+        S.ar.peer=peer; S.ar.conn=conn; S.ar.roomCode=code; S.ar.isHost=false;
+        setupConn(conn);
+        const stEl=document.getElementById('auto-st');
+        if(stEl) stEl.innerHTML=`<span style="color:var(--ok)">${ICO.check} 找到對手！</span>`;
+        conn.send({type:'start', deck:S.ar.deck});
+        finish(true);
+      });
+      conn.on('error', ()=>finish(false));
+      // 連線逾時 4 秒
+      setTimeout(()=>finish(false), 4000);
+    });
+    peer.on('error', ()=>finish(false));
+    setTimeout(()=>finish(false), 6000); // 最長等 6 秒
+  });
+}
+
+function autoHostRoom(code){
+  if(!S.ar._autoSearching) return;
+  const peer = makePeer(code);
+  S.ar.peer=peer; S.ar.roomCode=code; S.ar.isHost=true;
+
+  peer.on('open',()=>{
+    const stEl=document.getElementById('auto-st');
+    if(stEl) stEl.innerHTML=`${ICO.spin} 等待對手（最多 40 秒）…`;
+  });
+
+  peer.on('connection',conn=>{
+    if(!S.ar._autoSearching){ try{peer.destroy()}catch(e){}; return; }
+    S.ar.conn=conn; S.ar._autoSearching=false;
+    setupConn(conn);
+    const stEl=document.getElementById('auto-st');
+    if(stEl) stEl.innerHTML=`<span style="color:var(--ok)">${ICO.check} 找到對手！</span>`;
+    const cancelBtn=document.getElementById('btn-cancel-auto');
+    if(cancelBtn) cancelBtn.style.display='none';
+    setTimeout(()=>{ conn.send({type:'start', deck:S.ar.deck}); }, 300);
+  });
+
+  peer.on('error', e=>{
+    // ID 已被佔用 → 表示有人用同一個 slot 開房，改成加入他
+    if(e.type==='unavailable-id' || e.type==='peer-unavailable'){
+      if(S.ar._autoSearching){
+        const stEl=document.getElementById('auto-st');
+        if(stEl) stEl.innerHTML=`${ICO.spin} 找到房間，正在加入…`;
+        tryAutoJoin(code).then(ok=>{
+          if(!ok && S.ar._autoSearching){
+            // 真的失敗了
+            cancelAutoMatch();
+            toast('匹配失敗，請稍後再試','error');
+          }
+        });
+      }
+    } else {
+      if(S.ar._autoSearching){
+        cancelAutoMatch();
+        toast('匹配失敗：'+e.type,'error');
+      }
+    }
+  });
+
+  // 40 秒後若沒人加入，放棄
+  setTimeout(()=>{
+    if(S.ar._autoSearching){
+      cancelAutoMatch();
+      toast('等待逾時，沒有找到對手','info');
+    }
+  }, 40000);
+}
+
 function copyCode(){ if(S.ar.roomCode) navigator.clipboard.writeText(S.ar.roomCode).then(()=>toast('已複製！','ok')); }
 
-function netHost(){
+// PeerJS 動態載入（不阻塞頁面啟動）
+let _peerJsLoaded = false;
+let _peerJsLoading = false;
+let _peerJsCallbacks = [];
+
+function loadPeerJS(cb){
+  if(_peerJsLoaded){ cb(true); return; }
+  _peerJsCallbacks.push(cb);
+  if(_peerJsLoading) return;
+  _peerJsLoading = true;
+  const s = document.createElement('script');
+  s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+  s.onload = ()=>{
+    _peerJsLoaded = true; _peerJsLoading = false;
+    _peerJsCallbacks.forEach(fn=>fn(true));
+    _peerJsCallbacks = [];
+  };
+  s.onerror = ()=>{
+    _peerJsLoading = false;
+    _peerJsCallbacks.forEach(fn=>fn(false));
+    _peerJsCallbacks = [];
+  };
+  document.head.appendChild(s);
+}
+
+function makePeer(id){
+  if(typeof Peer === 'undefined') return null;
+  const cfg = {
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      ]
+    },
+    debug: 0,
+  };
+  try { return id ? new Peer(id, cfg) : new Peer(cfg); }
+  catch(e) { return id ? new Peer(id) : new Peer(); }
+}
+
+// 包裝：需要 PeerJS 的操作都走這個
+function withPeer(fn){
+  loadPeerJS(ok=>{
+    if(!ok){ toast('無法載入連線功能，請檢查網路','error'); return; }
+    fn();
+  });
+}
+
+function netHost(){ withPeer(()=>_netHost()); }
+function _netHost(){
   const btn=document.getElementById('btn-host');
   btn.disabled=true; btn.innerHTML=`${ICO.spin} 建立中…`;
   const code=Math.random().toString(36).substring(2,8).toUpperCase();
   S.ar.roomCode=code; S.ar.isHost=true;
-  let peer;
-  try{ peer=new Peer(code); }catch(e){ peer=new Peer(); }
+  const peer = makePeer(code);
   S.ar.peer=peer;
   peer.on('open',()=>{
     const ha=document.getElementById('host-area');
@@ -1615,29 +2239,39 @@ function netHost(){
     S.ar.conn=conn; setupConn(conn);
     const hs=document.getElementById('host-st');
     if(hs) hs.innerHTML=`<span style="color:var(--ok)">${ICO.check} 對手已連線，等待牌組交換…</span>`;
-    // Host sends deck — waits for opponent's deck via handleNet('start') before starting
     setTimeout(()=>{ conn.send({type:'start',deck:S.ar.deck}); },300);
-    // Host will start battle when it receives opponent's 'start' message (in handleNet)
   });
-  peer.on('error',e=>{ toast('建立房間失敗：'+e.type,'error'); });
+  peer.on('error',e=>{
+    toast('建立房間失敗：'+e.type+' — 請確認網路連線','error');
+    const btn2=document.getElementById('btn-host');
+    if(btn2){ btn2.disabled=false; btn2.innerHTML='重新建立'; }
+  });
 }
 
-function netJoin(){
+function netJoin(){ withPeer(()=>_netJoin()); }
+function _netJoin(){
   const code=document.getElementById('jin').value.toUpperCase().trim();
   if(code.length<4){ toast('請輸入正確房間碼','error'); return; }
   const stEl=document.getElementById('join-st');
   if(stEl) stEl.innerHTML=`<span style="display:flex;align-items:center;gap:5px;justify-content:center">${ICO.spin} 連線中…</span>`;
   S.ar.roomCode=code; S.ar.isHost=false;
-  const peer=new Peer(); S.ar.peer=peer;
+  const peer = makePeer(null);
+  S.ar.peer=peer;
   peer.on('open',()=>{
-    const conn=peer.connect(code); S.ar.conn=conn; setupConn(conn);
+    const conn=peer.connect(code, {reliable:true}); S.ar.conn=conn; setupConn(conn);
     conn.on('open',()=>{
       if(stEl) stEl.innerHTML=`<span style="color:var(--ok);display:flex;align-items:center;gap:5px;justify-content:center">${ICO.check} 已連線，交換牌組中…</span>`;
       conn.send({type:'start',deck:S.ar.deck});
     });
+    // timeout check
+    setTimeout(()=>{
+      if(S.ar.phase==='net_lobby'){
+        if(stEl) stEl.innerHTML=`<span style="color:var(--danger)">連線逾時，請確認房間碼並重試</span>`;
+      }
+    }, 12000);
   });
-  peer.on('error',()=>{
-    if(stEl) stEl.innerHTML=`<span style="color:var(--danger)">無法連線，請確認房間碼</span>`;
+  peer.on('error',(e)=>{
+    if(stEl) stEl.innerHTML=`<span style="color:var(--danger)">無法連線：${e.type} — 請確認房間碼</span>`;
   });
 }
 
@@ -1672,10 +2306,10 @@ function renderNet(){
   const isAnim = ar.netAnimating;
   const opReady = no.ready; // opponent has played
 
-  // My hand — show cards face-up, used ones greyed
+  // My hand — event delegation with data-idx
   const myHandH = np.hand.map((c,i)=>{
     const u=np.used.has(i), sel=np.sel===i;
-    return `<div class="hcard ${u?'used':''} ${sel?'sel':''}" onclick="playNet(${i})">${cardH(c,true)}</div>`;
+    return `<div class="hcard ${u?'used':''} ${sel?'sel':''}" data-idx="${i}" style="${(u||np.sel!==null||isAnim)?'pointer-events:none':''}">${cardH(c,true)}</div>`;
   }).join('');
 
   // Opponent's hand — always face-down (backside), used ones gone
@@ -1707,17 +2341,26 @@ function renderNet(){
   </div>
 
   <!-- My hand -->
-  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;${isAnim?'opacity:.5;pointer-events:none':''}">
+  <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px">
     <div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:7px">
       ${np.sel===null ? '選擇出戰卡牌' : `已選：${np.hand[np.sel]?.word}`}
     </div>
-    <div class="hand-row">${myHandH}</div>
+    <div class="hand-row" id="net-hand-row" onclick="netHandClick(event)">${myHandH}</div>
   </div>
 
   ${statusMsg}
   <div style="font-size:11px;color:var(--muted);text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px">
     ${ICO.wifi} 房間碼：<strong style="color:var(--accent2)">${S.ar.roomCode}</strong>
   </div>`;
+}
+
+function netHandClick(event){
+  if(S.ar.netAnimating || S.ar.np.sel!==null) return;
+  const card = event.target.closest('[data-idx]');
+  if(!card) return;
+  const idx = parseInt(card.dataset.idx);
+  if(isNaN(idx)) return;
+  playNet(idx);
 }
 
 function playNet(idx){
@@ -1779,11 +2422,12 @@ function init(){
   load(); updHdr();
   if(S.unlockedLib) document.getElementById('nb-library').classList.remove('lk');
   if(S.cards.length>=4) document.getElementById('nb-arena').classList.remove('lk');
-  setTimeout(()=>{
-    const sp=document.getElementById('splash');
-    sp.style.opacity='0';
-    setTimeout(()=>sp.remove(), 400);
-  }, 500);
+
+  // 立即移除 splash，不等網路
+  const sp=document.getElementById('splash');
+  sp.style.opacity='0';
+  setTimeout(()=>{ try{sp.remove()}catch(e){} }, 400);
+
   startHM();
 }
 init();
