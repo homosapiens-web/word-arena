@@ -480,17 +480,180 @@ async function getDictData(word){
   }catch(e){ return null; }
 }
 
+// ── 本地 CEFR 對照表（Cambridge / Oxford 來源，800+ 字）──
+const CEFR_DB = {
+  // A1
+  a:'A1',able:'A1',about:'A1',above:'A1',across:'A1',after:'A1',again:'A1',age:'A1',ago:'A1',
+  all:'A1',also:'A1',always:'A1',am:'A1',an:'A1',and:'A1',answer:'A1',any:'A1',are:'A1',
+  arm:'A1',arrive:'A1',as:'A1',ask:'A1',at:'A1',away:'A1',baby:'A1',back:'A1',bad:'A1',
+  bag:'A1',ball:'A1',be:'A1',because:'A1',bed:'A1',big:'A1',bike:'A1',bird:'A1',black:'A1',
+  blue:'A1',book:'A1',both:'A1',boy:'A1',bread:'A1',brother:'A1',bus:'A1',but:'A1',buy:'A1',
+  by:'A1',call:'A1',can:'A1',car:'A1',cat:'A1',chair:'A1',child:'A1',city:'A1',class:'A1',
+  close:'A1',cold:'A1',come:'A1',computer:'A1',cook:'A1',country:'A1',day:'A1',do:'A1',
+  dog:'A1',door:'A1',down:'A1',draw:'A1',drink:'A1',drive:'A1',eat:'A1',end:'A1',English:'A1',
+  every:'A1',eye:'A1',face:'A1',family:'A1',fast:'A1',father:'A1',find:'A1',fine:'A1',
+  fish:'A1',floor:'A1',fly:'A1',food:'A1',foot:'A1',for:'A1',free:'A1',friend:'A1',from:'A1',
+  fruit:'A1',fun:'A1',game:'A1',garden:'A1',get:'A1',girl:'A1',give:'A1',go:'A1',good:'A1',
+  great:'A1',green:'A1',hand:'A1',happy:'A1',have:'A1',he:'A1',head:'A1',help:'A1',her:'A1',
+  here:'A1',hi:'A1',his:'A1',home:'A1',hot:'A1',house:'A1',how:'A1',hungry:'A1',I:'A1',
+  in:'A1',into:'A1',is:'A1',it:'A1',just:'A1',key:'A1',know:'A1',large:'A1',last:'A1',
+  late:'A1',learn:'A1',left:'A1',leg:'A1',like:'A1',listen:'A1',little:'A1',live:'A1',
+  long:'A1',look:'A1',love:'A1',lunch:'A1',make:'A1',man:'A1',many:'A1',me:'A1',meet:'A1',
+  milk:'A1',money:'A1',month:'A1',morning:'A1',mother:'A1',much:'A1',music:'A1',my:'A1',
+  name:'A1',need:'A1',new:'A1',next:'A1',nice:'A1',night:'A1',no:'A1',now:'A1',number:'A1',
+  of:'A1',on:'A1',one:'A1',open:'A1',or:'A1',our:'A1',out:'A1',play:'A1',please:'A1',
+  red:'A1',right:'A1',run:'A1',say:'A1',see:'A1',she:'A1',sit:'A1',small:'A1',so:'A1',
+  some:'A1',speak:'A1',sport:'A1',stop:'A1',street:'A1',swim:'A1',table:'A1',take:'A1',
+  talk:'A1',teacher:'A1',that:'A1',the:'A1',their:'A1',them:'A1',there:'A1',they:'A1',
+  this:'A1',time:'A1',to:'A1',today:'A1',together:'A1',too:'A1',town:'A1',train:'A1',
+  tree:'A1',two:'A1',up:'A1',us:'A1',very:'A1',walk:'A1',want:'A1',water:'A1',we:'A1',
+  week:'A1',what:'A1',when:'A1',where:'A1',which:'A1',white:'A1',who:'A1',with:'A1',
+  woman:'A1',word:'A1',write:'A1',year:'A1',yes:'A1',you:'A1',young:'A1',your:'A1',
+  // A2
+  accept:'A2',accident:'A2',activity:'A2',address:'A2',afraid:'A2',airport:'A2',angry:'A2',
+  animal:'A2',apartment:'A2',area:'A2',art:'A2',August:'A2',autumn:'A2',beautiful:'A2',
+  become:'A2',begin:'A2',believe:'A2',between:'A2',bicycle:'A2',board:'A2',body:'A2',
+  bored:'A2',boring:'A2',bring:'A2',build:'A2',busy:'A2',care:'A2',carry:'A2',celebrate:'A2',
+  center:'A2',centre:'A2',chance:'A2',change:'A2',check:'A2',clean:'A2',climb:'A2',club:'A2',
+  collect:'A2',colour:'A2',comfortable:'A2',complete:'A2',correct:'A2',create:'A2',cry:'A2',
+  culture:'A2',dangerous:'A2',dark:'A2',decide:'A2',describe:'A2',design:'A2',different:'A2',
+  dinner:'A2',direction:'A2',doctor:'A2',dream:'A2',during:'A2',early:'A2',easy:'A2',
+  email:'A2',enjoy:'A2',environment:'A2',even:'A2',evening:'A2',exam:'A2',example:'A2',
+  excellent:'A2',exciting:'A2',exercise:'A2',expensive:'A2',experience:'A2',explain:'A2',
+  fall:'A2',famous:'A2',far:'A2',feel:'A2',film:'A2',follow:'A2',forget:'A2',form:'A2',
+  future:'A2',garden:'A2',gift:'A2',government:'A2',group:'A2',grow:'A2',guess:'A2',
+  guide:'A2',half:'A2',happen:'A2',hard:'A2',hear:'A2',heart:'A2',heavy:'A2',history:'A2',
+  hobby:'A2',holiday:'A2',hope:'A2',hospital:'A2',hotel:'A2',idea:'A2',important:'A2',
+  information:'A2',internet:'A2',introduce:'A2',invite:'A2',job:'A2',join:'A2',journey:'A2',
+  kind:'A2',kitchen:'A2',lake:'A2',language:'A2',laugh:'A2',letter:'A2',lie:'A2',life:'A2',
+  lost:'A2',loud:'A2',map:'A2',market:'A2',meal:'A2',mean:'A2',member:'A2',mind:'A2',
+  miss:'A2',mountain:'A2',mouth:'A2',move:'A2',museum:'A2',natural:'A2',near:'A2',
+  neighbour:'A2',news:'A2',newspaper:'A2',once:'A2',only:'A2',page:'A2',parent:'A2',
+  park:'A2',party:'A2',pass:'A2',past:'A2',pay:'A2',people:'A2',picture:'A2',place:'A2',
+  plan:'A2',poor:'A2',popular:'A2',possible:'A2',present:'A2',pretty:'A2',price:'A2',
+  problem:'A2',produce:'A2',programme:'A2',put:'A2',question:'A2',quiet:'A2',ready:'A2',
+  receive:'A2',relax:'A2',remember:'A2',restaurant:'A2',return:'A2',rich:'A2',road:'A2',
+  room:'A2',round:'A2',safe:'A2',same:'A2',school:'A2',send:'A2',sentence:'A2',shop:'A2',
+  short:'A2',show:'A2',sick:'A2',side:'A2',since:'A2',sing:'A2',sister:'A2',sleep:'A2',
+  slow:'A2',smile:'A2',snow:'A2',soon:'A2',sorry:'A2',sound:'A2',start:'A2',station:'A2',
+  stay:'A2',still:'A2',strong:'A2',student:'A2',study:'A2',sure:'A2',surprise:'A2',
+  teach:'A2',team:'A2',television:'A2',tell:'A2',think:'A2',tired:'A2',turn:'A2',understand:'A2',
+  useful:'A2',usually:'A2',visit:'A2',wait:'A2',weather:'A2',well:'A2',while:'A2',wide:'A2',
+  win:'A2',wonderful:'A2',work:'A2',world:'A2',worry:'A2',worse:'A2',wrong:'A2',
+  // B1
+  achieve:'B1',affect:'B1',afford:'B1',agree:'B1',allow:'B1',although:'B1',announce:'B1',
+  appear:'B1',apply:'B1',argue:'B1',arrange:'B1',attempt:'B1',attend:'B1',attitude:'B1',
+  audience:'B1',avoid:'B1',award:'B1',aware:'B1',base:'B1',basic:'B1',border:'B1',
+  brain:'B1',brave:'B1',break:'B1',campaign:'B1',career:'B1',cause:'B1',challenge:'B1',
+  character:'B1',choice:'B1',citizen:'B1',claim:'B1',clearly:'B1',college:'B1',
+  communicate:'B1',community:'B1',company:'B1',compare:'B1',compete:'B1',complain:'B1',
+  complex:'B1',concern:'B1',condition:'B1',confidence:'B1',connect:'B1',consider:'B1',
+  contain:'B1',continue:'B1',contribute:'B1',control:'B1',convenient:'B1',conversation:'B1',
+  convince:'B1',cost:'B1',creative:'B1',crime:'B1',criticise:'B1',current:'B1',customer:'B1',
+  damage:'B1',deal:'B1',debate:'B1',deep:'B1',definitely:'B1',depend:'B1',develop:'B1',
+  difference:'B1',difficult:'B1',disappear:'B1',discuss:'B1',distance:'B1',doubt:'B1',
+  economic:'B1',education:'B1',effect:'B1',effort:'B1',election:'B1',encourage:'B1',
+  energy:'B1',event:'B1',expect:'B1',fair:'B1',figure:'B1',finally:'B1',forest:'B1',
+  friendship:'B1',general:'B1',global:'B1',health:'B1',healthy:'B1',improve:'B1',include:'B1',
+  increase:'B1',independent:'B1',industry:'B1',influence:'B1',instead:'B1',interest:'B1',
+  issue:'B1',knowledge:'B1',leader:'B1',legal:'B1',level:'B1',lifestyle:'B1',limit:'B1',
+  local:'B1',main:'B1',manage:'B1',matter:'B1',media:'B1',meeting:'B1',method:'B1',
+  modern:'B1',moment:'B1',national:'B1',nature:'B1',normal:'B1',notice:'B1',offer:'B1',
+  opinion:'B1',order:'B1',organization:'B1',outcome:'B1',perform:'B1',personal:'B1',
+  physical:'B1',plan:'B1',political:'B1',pollution:'B1',position:'B1',positive:'B1',
+  practice:'B1',prefer:'B1',prepare:'B1',pressure:'B1',prevent:'B1',private:'B1',
+  process:'B1',protect:'B1',prove:'B1',provide:'B1',public:'B1',purpose:'B1',raise:'B1',
+  reach:'B1',realise:'B1',reason:'B1',reduce:'B1',reflect:'B1',regard:'B1',relationship:'B1',
+  report:'B1',require:'B1',research:'B1',respond:'B1',result:'B1',role:'B1',rule:'B1',
+  science:'B1',serious:'B1',share:'B1',simple:'B1',situation:'B1',skill:'B1',social:'B1',
+  society:'B1',solution:'B1',source:'B1',spend:'B1',standard:'B1',stress:'B1',structure:'B1',
+  subject:'B1',success:'B1',suggest:'B1',support:'B1',technology:'B1',therefore:'B1',
+  throughout:'B1',topic:'B1',traditional:'B1',transport:'B1',trust:'B1',unless:'B1',
+  value:'B1',variety:'B1',various:'B1',view:'B1',vote:'B1',waste:'B1',whereas:'B1',
+  whether:'B1',whole:'B1',
+  // B2
+  abandon:'B2',abstract:'B2',academic:'B2',access:'B2',accurate:'B2',acknowledge:'B2',
+  acquire:'B2',adapt:'B2',adequate:'B2',administration:'B2',adopt:'B2',advance:'B2',
+  advantage:'B2',analyse:'B2',analysis:'B2',approach:'B2',appropriate:'B2',aspect:'B2',
+  assess:'B2',assumption:'B2',authority:'B2',benefit:'B2',capable:'B2',category:'B2',
+  circumstance:'B2',commit:'B2',commitment:'B2',concept:'B2',conclude:'B2',conflict:'B2',
+  consequence:'B2',consist:'B2',constitute:'B2',construct:'B2',context:'B2',contract:'B2',
+  contrast:'B2',controversial:'B2',convince:'B2',cope:'B2',corporate:'B2',criteria:'B2',
+  crucial:'B2',decline:'B2',define:'B2',demonstrate:'B2',devote:'B2',digital:'B2',
+  dimension:'B2',discipline:'B2',distinct:'B2',distribute:'B2',diversity:'B2',dominate:'B2',
+  eliminate:'B2',emphasise:'B2',encounter:'B2',ensure:'B2',establish:'B2',evaluate:'B2',
+  evidence:'B2',evolve:'B2',examine:'B2',expand:'B2',exploit:'B2',expose:'B2',express:'B2',
+  extensive:'B2',factor:'B2',feature:'B2',finance:'B2',flexible:'B2',focus:'B2',foster:'B2',
+  framework:'B2',function:'B2',fundamental:'B2',generate:'B2',gradually:'B2',grant:'B2',
+  guarantee:'B2',hypothesis:'B2',identify:'B2',illustrate:'B2',impact:'B2',implement:'B2',
+  imply:'B2',indicate:'B2',inevitable:'B2',innovation:'B2',integrate:'B2',interpret:'B2',
+  investigate:'B2',involve:'B2',justify:'B2',maintain:'B2',majority:'B2',mechanism:'B2',
+  modify:'B2',monitor:'B2',motivation:'B2',objective:'B2',obtain:'B2',occur:'B2',
+  perspective:'B2',phenomenon:'B2',policy:'B2',potential:'B2',predict:'B2',principle:'B2',
+  promote:'B2',proportion:'B2',range:'B2',rely:'B2',reveal:'B2',significant:'B2',
+  strategy:'B2',substantial:'B2',sufficient:'B2',sustainable:'B2',technical:'B2',
+  theory:'B2',transfer:'B2',transform:'B2',trend:'B2',ultimately:'B2',unique:'B2',
+  utilize:'B2',valid:'B2',variable:'B2',whereas:'B2',widespread:'B2',
+  // C1
+  ambiguous:'C1',analogy:'C1',articulate:'C1',assertion:'C1',attribute:'C1',coherent:'C1',
+  compelling:'C1',complement:'C1',comprehensive:'C1',conceive:'C1',concurrent:'C1',
+  constitute:'C1',contemplate:'C1',contradict:'C1',controversy:'C1',cultivate:'C1',
+  deduce:'C1',deliberate:'C1',denote:'C1',derive:'C1',differentiate:'C1',dilemma:'C1',
+  discrepancy:'C1',distinguish:'C1',elaborate:'C1',empirical:'C1',endorse:'C1',
+  envisage:'C1',explicit:'C1',facilitate:'C1',formulate:'C1',forthcoming:'C1',implicit:'C1',
+  inadequate:'C1',inherent:'C1',innovative:'C1',integrity:'C1',intrinsic:'C1',invoke:'C1',
+  magnitude:'C1',manifest:'C1',methodology:'C1',misconception:'C1',notion:'C1',
+  obligation:'C1',obscure:'C1',paradigm:'C1',perceive:'C1',persistent:'C1',predominant:'C1',
+  preliminary:'C1',premise:'C1',profound:'C1',prohibit:'C1',prominent:'C1',protocol:'C1',
+  refine:'C1',reinforce:'C1',relevant:'C1',reluctant:'C1',remedy:'C1',resilience:'C1',
+  rhetoric:'C1',rigorous:'C1',scrutiny:'C1',sequential:'C1',simulate:'C1',simultaneously:'C1',
+  sophisticated:'C1',subjective:'C1',supplement:'C1',suppress:'C1',sustain:'C1',
+  synthesis:'C1',threshold:'C1',undergo:'C1',undermine:'C1',unprecedented:'C1',
+  // C2
+  aberration:'C2',abstruse:'C2',acrimony:'C2',adumbrate:'C2',ameliorate:'C2',
+  anachronism:'C2',anomalous:'C2',antithesis:'C2',appease:'C2',archaic:'C2',arduous:'C2',
+  assiduous:'C2',bellicose:'C2',benevolent:'C2',byzantine:'C2',cacophony:'C2',
+  capitulate:'C2',capricious:'C2',catalyst:'C2',catharsis:'C2',circumspect:'C2',
+  cognizant:'C2',complacent:'C2',conciliatory:'C2',convoluted:'C2',dearth:'C2',
+  debilitate:'C2',deleterious:'C2',demagogue:'C2',disingenuous:'C2',dissonance:'C2',
+  ebullient:'C2',efficacious:'C2',ephemeral:'C2',equivocate:'C2',erudite:'C2',
+  esoteric:'C2',exacerbate:'C2',expedient:'C2',extraneous:'C2',fallacious:'C2',
+  fastidious:'C2',flippant:'C2',fortuitous:'C2',garrulous:'C2',gregarious:'C2',
+  hegemony:'C2',iconoclast:'C2',idiosyncratic:'C2',impetuous:'C2',incorrigible:'C2',
+  indignant:'C2',ineffable:'C2',insinuate:'C2',intransigent:'C2',labyrinth:'C2',
+  laconic:'C2',languid:'C2',lethargic:'C2',lucid:'C2',magnanimous:'C2',malevolent:'C2',
+  malleable:'C2',melancholy:'C2',mendacious:'C2',mercurial:'C2',metamorphosis:'C2',
+  meticulous:'C2',mitigate:'C2',mundane:'C2',nefarious:'C2',obfuscate:'C2',
+  obstreperous:'C2',ominous:'C2',omniscient:'C2',ostentatious:'C2',palimpsest:'C2',
+  paradox:'C2',parsimonious:'C2',pedantic:'C2',pernicious:'C2',perfidious:'C2',
+  perspicacious:'C2',petrichor:'C2',pragmatic:'C2',precocious:'C2',pretentious:'C2',
+  procrastinate:'C2',propitious:'C2',querulous:'C2',quintessential:'C2',recalcitrant:'C2',
+  recondite:'C2',reticent:'C2',sanguine:'C2',sardonic:'C2',serendipity:'C2',
+  soliloquy:'C2',sonder:'C2',spurious:'C2',surreptitious:'C2',sycophant:'C2',
+  taciturn:'C2',tangential:'C2',tenacious:'C2',trepidation:'C2',ubiquitous:'C2',
+  umbrage:'C2',vacillate:'C2',verbose:'C2',vicarious:'C2',volatile:'C2',wanderlust:'C2',
+  wistful:'C2',zealous:'C2',zenith:'C2',
+};
+
 async function getCEFR(word){
-  // Cambridge Learner's Dictionary HTML scrape
-  const r = await sfetch(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(word)}`, 7000);
-  if(!r) return null;
+  const w = word.toLowerCase();
+
+  // 1. 本地對照表（最快、最準確）
+  if(CEFR_DB[w]) return CEFR_DB[w];
+
+  // 2. Cambridge Learner's Dictionary HTML scrape（需要網路，可能被 CORS 擋）
   try{
-    const html = await r.text();
-    const m = html.match(/class="epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
-           || html.match(/>\s*([ABC][12])\s*<\/span>/i)
-           || html.match(/data-level="([ABC][12])"/i);
-    return m ? m[1].toUpperCase() : null;
-  }catch(e){ return null; }
+    const r = await sfetch(`https://dictionary.cambridge.org/dictionary/learner-english/${encodeURIComponent(w)}`, 6000);
+    if(r){
+      const html = await r.text();
+      const m = html.match(/class="epp-xref[^"]*"[^>]*>\s*([ABC][12])\s*</i)
+             || html.match(/>\s*([ABC][12])\s*<\/span>/i)
+             || html.match(/data-level="([ABC][12])"/i);
+      if(m) return m[1].toUpperCase();
+    }
+  }catch(e){}
+
+  return null; // 讓 fetchWordData 用字長估算
 }
 
 // ── 內建常見字翻譯對照（保底，MyMemory 失敗時用）──
